@@ -3,23 +3,28 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mirror Muse - AI 整套穿搭生成</title>
+  <title>Mirror Muse - AI 双套穿搭生成</title>
+  <meta
+    name="description"
+    content="上传一件上衣，选择风格、场景、模式和配色方向，生成两套完整穿搭建议与 AI 效果图。"
+  >
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="page-shell">
     <header class="hero">
       <div class="hero-copy">
-        <p class="hero-kicker">Mirror Muse / Full Look Generator</p>
-        <h1>上传一件上衣，生成整套穿搭建议和效果图</h1>
+        <p class="hero-kicker">Mirror Muse / Double Outfit Studio</p>
+        <h1>上传一件上衣，生成两套完整穿搭方案</h1>
         <p class="hero-text">
-          上传上衣图片，选择场景、风格和生图方案，系统会自动补全裤子、鞋子、配饰和帽子，并生成一张完整的整套穿搭图。
+          这版重点不是试穿上身，而是围绕同一件上衣，直接给你两套可参考的完整搭配。
+          你可以先定场景、风格、搭配模式和配色方向，再让 AI 出一张双方案穿搭图。
         </p>
       </div>
       <div class="hero-tags">
         <span>上传上衣</span>
-        <span>选择风格</span>
-        <span>输出整套搭配</span>
+        <span>丰富模式</span>
+        <span>双套方案</span>
       </div>
     </header>
 
@@ -28,10 +33,10 @@
         <div class="section-head">
           <div>
             <p class="section-label">Input</p>
-            <h2>先确定主单品、风格和生成方案</h2>
+            <h2>先把你的搭配方向定清楚</h2>
           </div>
           <p class="section-copy">
-            这一版不做真人上身试穿，重点是让用户快速拿到完整穿搭方案和整套展示图。
+            系统会先给一套更稳妥、好穿、容易照着买的方案，再给一套更有造型感、更适合拍照或表达风格的方案。
           </p>
         </div>
 
@@ -44,35 +49,75 @@
             <label class="upload-box accent-box">
               <input id="garmentInput" type="file" accept="image/*">
               <strong>选择上衣图片</strong>
-              <small>支持商品图、平铺图、纯背景主图</small>
+              <small>支持商品图、平铺图、白底图或较干净的实拍图</small>
             </label>
           </article>
 
           <article class="input-card">
             <div class="card-head">
-              <h3>2. 选择穿搭场景</h3>
-              <span>会影响整套建议</span>
+              <h3>2. 穿着场景</h3>
+              <span>决定整体实用方向</span>
             </div>
             <label class="field-block">
               <span>场景</span>
               <select id="occasionInput">
-                <option value="commute" selected>通勤</option>
-                <option value="casual">日常</option>
-                <option value="date">约会</option>
-                <option value="street">街头</option>
+                <option value="commute" selected>通勤上班</option>
+                <option value="casual">日常出门</option>
+                <option value="date">约会出片</option>
+                <option value="street">街头造型</option>
+                <option value="travel">旅行轻便</option>
+                <option value="party">聚会夜晚</option>
+                <option value="campus">校园休闲</option>
+              </select>
+            </label>
+          </article>
+
+          <article class="input-card">
+            <div class="card-head">
+              <h3>3. 搭配模式</h3>
+              <span>控制造型重点</span>
+            </div>
+            <label class="field-block">
+              <span>模式</span>
+              <select id="modeInput">
+                <option value="balanced" selected>稳妥不出错</option>
+                <option value="camera">更上镜出片</option>
+                <option value="slimming">更显高显瘦</option>
+                <option value="comfort">更轻松好穿</option>
+                <option value="statement">更有造型感</option>
+                <option value="luxury">更精致贵气</option>
+                <option value="youthful">更年轻活力</option>
+              </select>
+            </label>
+          </article>
+
+          <article class="input-card">
+            <div class="card-head">
+              <h3>4. 配色方向</h3>
+              <span>决定氛围感</span>
+            </div>
+            <label class="field-block">
+              <span>配色策略</span>
+              <select id="colorStrategyInput">
+                <option value="toneOnTone" selected>顺色延伸</option>
+                <option value="lightContrast">轻对比提亮</option>
+                <option value="softLuxury">低饱和高级感</option>
+                <option value="seasonal">季节氛围配色</option>
+                <option value="cleanNeutrals">干净中性色</option>
+                <option value="accentPop">一点亮色点题</option>
               </select>
             </label>
           </article>
 
           <article class="input-card input-card-wide">
             <div class="card-head">
-              <h3>3. 选择穿搭风格</h3>
-              <span>系统会按风格补齐整套</span>
+              <h3>5. 搭配风格</h3>
+              <span>系统会按风格补全整套服装与配饰</span>
             </div>
-            <div class="style-grid" id="styleGrid">
+            <div class="style-grid style-grid-wide" id="styleGrid">
               <button class="style-card is-active" type="button" data-style="quietLuxury">
                 <strong>静奢通勤</strong>
-                <span>干净、克制、贵气但不夸张</span>
+                <span>干净、克制、贵气但不过分张扬</span>
               </button>
               <button class="style-card" type="button" data-style="sweetDate">
                 <strong>甜感约会</strong>
@@ -80,50 +125,49 @@
               </button>
               <button class="style-card" type="button" data-style="streetCool">
                 <strong>街头酷感</strong>
-                <span>年轻、有态度、轮廓感明显</span>
+                <span>年轻、有态度、轮廓和层次更明显</span>
               </button>
               <button class="style-card" type="button" data-style="cleanMinimal">
                 <strong>极简清冷</strong>
-                <span>利落、冷静、偏高级感</span>
+                <span>利落、冷静、偏高审美感</span>
+              </button>
+              <button class="style-card" type="button" data-style="frenchRelaxed">
+                <strong>法式松弛</strong>
+                <span>自然、耐看、轻松但不随便</span>
+              </button>
+              <button class="style-card" type="button" data-style="urbanOutdoor">
+                <strong>城市机能</strong>
+                <span>轻户外、实穿、层次和功能感更强</span>
+              </button>
+              <button class="style-card" type="button" data-style="retroAcademy">
+                <strong>复古学院</strong>
+                <span>清爽、文艺、带一点复古气质</span>
+              </button>
+              <button class="style-card" type="button" data-style="resortChic">
+                <strong>度假轻奢</strong>
+                <span>轻盈、松弛、适合旅行和夏日氛围</span>
               </button>
             </div>
           </article>
 
           <article class="input-card">
             <div class="card-head">
-              <h3>4. 选择生图方案</h3>
-              <span>可切换不同模型</span>
+              <h3>6. 当前方向</h3>
+              <span>会输出两套方案</span>
             </div>
-            <label class="field-block">
-              <span>图片生成提供方</span>
-              <select id="providerInput">
-                <option value="relay" selected>ChatGPT 中转站</option>
-                <option value="gemini">Gemini 官方 API</option>
-              </select>
-            </label>
-            <p class="provider-note" id="providerHint">
-              默认使用 ChatGPT 中转站，适合你当前已有的中转配置。
-            </p>
+            <div class="selected-style">
+              <strong id="selectedStyleName">静奢通勤</strong>
+              <p id="selectedStyleText">系统会先给一套更稳妥的日常方案，再给一套更有造型感的升级方案。</p>
+            </div>
           </article>
 
           <article class="input-card">
             <div class="card-head">
-              <h3>5. 当前选择</h3>
-              <span>普通消费者视角</span>
-            </div>
-            <div class="selected-style">
-              <strong id="selectedStyleName">静奢通勤</strong>
-              <p id="selectedStyleText">适合想要稳、净、有质感的日常用户。</p>
-            </div>
-          </article>
-
-          <article class="input-card input-card-wide">
-            <div class="card-head">
-              <h3>6. 生成整套图片</h3>
-              <span>输出完整 look 图</span>
+              <h3>7. 生成双套穿搭图</h3>
+              <span>一张图看两套</span>
             </div>
             <div class="action-row">
-              <button class="primary-button" id="generateButton" type="button">生成整套穿搭图</button>
+              <button class="primary-button" id="generateButton" type="button">生成两套穿搭图</button>
               <button class="secondary-button" id="resetButton" type="button">重置</button>
             </div>
           </article>
@@ -134,23 +178,23 @@
         <div class="section-head">
           <div>
             <p class="section-label">Output</p>
-            <h2>AI 整套造型图</h2>
+            <h2>AI 双套造型图</h2>
           </div>
-          <span class="status-pill" id="previewState">等待生成</span>
+          <span class="status-pill" id="previewState">等待上传</span>
         </div>
 
         <div class="preview-stage">
           <div class="preview-placeholder" id="previewPlaceholder">
-            <strong>等待生成整套穿搭图</strong>
-            <p>上传上衣并选择风格后，这里会展示模型返回的整套穿搭图。</p>
+            <strong>等待生成双套穿搭图</strong>
+            <p>上传上衣并选择方向后，这里会展示一张包含 Look A 和 Look B 的完整结果图。</p>
           </div>
-          <img id="generatedImage" class="generated-image hidden" alt="AI 生成的整套穿搭图">
+          <img id="generatedImage" class="generated-image hidden" alt="AI 生成的双套穿搭图">
         </div>
 
         <div class="preview-note">
           <p class="mini-label">生成说明</p>
-          <strong id="previewHeadline">先上传上衣，再生成完整 look</strong>
-          <p id="previewCopy">系统会围绕上传的上衣，按风格自动补出裤子、鞋子、配饰和帽子。</p>
+          <strong id="previewHeadline">先上传上衣，再生成两套完整 look</strong>
+          <p id="previewCopy">系统会围绕同一件上衣，同时设计 Look A 和 Look B，两套都包含裤子、鞋子、配饰和帽子或发型方向。</p>
         </div>
       </section>
     </main>
@@ -159,40 +203,40 @@
       <div class="section-head">
         <div>
           <p class="section-label">Recommendation</p>
-          <h2>整套穿搭建议拆解</h2>
+          <h2>双套穿搭建议拆解</h2>
         </div>
-        <p class="section-copy" id="resultIntro">先有完整 look，用户才知道这件上衣最后会被搭成什么样。</p>
+        <p class="section-copy" id="resultIntro">同一件上衣，不只给一个答案，而是给你两种完整穿法。</p>
       </div>
 
-      <div class="result-grid">
+      <div class="result-grid dual-result-grid">
         <article class="result-card hero-result">
-          <small>整体风格</small>
+          <small>整体方向</small>
           <h3 id="resultVibe">静奢通勤</h3>
-          <p id="resultNarrative">让主单品留在视觉中心，其它单品负责稳住质感和完成度。</p>
+          <p id="resultNarrative">先稳住主单品，再拉开两套方案之间的风格差异。</p>
         </article>
 
-        <article class="result-card">
-          <small>裤子</small>
-          <h3 id="resultBottom">高腰烟管裤</h3>
-          <p id="resultBottomText">用利落裤型把整套的线条立起来。</p>
+        <article class="result-card look-card">
+          <small>Look A / 稳妥方案</small>
+          <h3 id="lookOneTitle">高腰烟管裤 + 尖头浅口鞋</h3>
+          <p id="lookOneNarrative">适合直接照着穿去通勤、见面或日常出门，重点是完整、干净、不费力。</p>
+          <div class="look-meta">
+            <span id="lookOneBottom">裤子：高腰烟管裤</span>
+            <span id="lookOneShoes">鞋子：尖头浅口鞋</span>
+            <span id="lookOneAccessory">配饰：金属耳饰</span>
+            <span id="lookOneHat">帽子：无帽 / 发夹替代</span>
+          </div>
         </article>
 
-        <article class="result-card">
-          <small>鞋子</small>
-          <h3 id="resultShoes">尖头浅口鞋</h3>
-          <p id="resultShoesText">鞋子决定这套 look 最后是轻松还是精致。</p>
-        </article>
-
-        <article class="result-card">
-          <small>配饰</small>
-          <h3 id="resultAccessory">金属耳饰</h3>
-          <p id="resultAccessoryText">只补最能立住气质的一笔，不要堆满。</p>
-        </article>
-
-        <article class="result-card">
-          <small>帽子</small>
-          <h3 id="resultHat">无帽 / 发箍替代</h3>
-          <p id="resultHatText">这套不一定强行加帽子，按风格决定是否需要头部单品。</p>
+        <article class="result-card look-card">
+          <small>Look B / 造型方案</small>
+          <h3 id="lookTwoTitle">垂感直筒裤 + 皮面乐福鞋</h3>
+          <p id="lookTwoNarrative">保留上衣主角位置，但通过更强的轮廓、配色和配件，让第二套更适合出片和表达风格。</p>
+          <div class="look-meta">
+            <span id="lookTwoBottom">裤子：垂感直筒裤</span>
+            <span id="lookTwoShoes">鞋子：皮面乐福鞋</span>
+            <span id="lookTwoAccessory">配饰：结构托特包</span>
+            <span id="lookTwoHat">帽子：小檐礼帽</span>
+          </div>
         </article>
 
         <article class="result-card palette-card">
@@ -202,7 +246,13 @@
             <span>烟灰</span>
             <span>深咖</span>
           </div>
-          <p id="resultPaletteText">配色的任务是把上衣托出来，不是跟它抢戏。</p>
+          <p id="resultPaletteText">配色的任务不是抢戏，而是把上衣托出来，让两套方案有区分，也有连续性。</p>
+        </article>
+
+        <article class="result-card insight-card">
+          <small>模式提示</small>
+          <h3 id="modeTitle">稳妥不出错</h3>
+          <p id="modeNarrative">Look A 会更日常好穿，Look B 会在同一方向上再往前走一步，方便你直接做选择。</p>
         </article>
       </div>
     </section>

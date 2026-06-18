@@ -6,10 +6,8 @@ const { URL } = require("url");
 loadDotEnv(path.join(__dirname, ".env.local"));
 
 const PORT = Number(process.env.PORT || 3000);
-const DEFAULT_PROVIDER = process.env.DEFAULT_IMAGE_PROVIDER || "relay";
 
 const RELAY_CONFIG = {
-  provider: "openai-compatible-relay",
   apiKey: process.env.IMAGE_API_KEY || process.env.OPENAI_API_KEY || "",
   baseUrl: process.env.IMAGE_BASE_URL || "https://gpt.fengxiaole.top/v1",
   apiMode: process.env.IMAGE_API_MODE || "responses",
@@ -19,15 +17,6 @@ const RELAY_CONFIG = {
   imageEditModel: process.env.IMAGE_EDIT_MODEL || "gpt-image-1",
   outputSize: process.env.IMAGE_OUTPUT_SIZE || "1024x1536",
   outputQuality: process.env.IMAGE_OUTPUT_QUALITY || "high",
-};
-
-const GEMINI_CONFIG = {
-  apiKey: process.env.GEMINI_API_KEY || "",
-  baseUrl: process.env.GEMINI_BASE_URL || "https://generativelanguage.googleapis.com",
-  apiVersion: process.env.GEMINI_API_VERSION || "v1beta",
-  model: process.env.GEMINI_IMAGE_MODEL || "gemini-3.1-flash-image",
-  aspectRatio: process.env.GEMINI_IMAGE_ASPECT_RATIO || "3:4",
-  imageSize: process.env.GEMINI_IMAGE_SIZE || "1K",
 };
 
 const PUBLIC_DIR = __dirname;
@@ -44,39 +33,76 @@ const MIME_TYPES = {
   ".svg": "image/svg+xml",
 };
 
-const PROVIDER_LABELS = {
-  relay: "ChatGPT 中转站",
-  gemini: "Gemini 官方 API",
-};
-
 const STYLE_GUIDES = {
   quietLuxury: {
     label: "Quiet luxury",
-    outfit: "tailored trousers, refined low-profile shoes, subtle metal jewelry, and a clean understated head accessory or no hat",
+    outfit: "tailored trousers, refined low-profile shoes, subtle jewelry, and clean understated finishing pieces",
     mood: "polished, premium, restrained, elegant, neutral color palette",
   },
   sweetDate: {
     label: "Sweet date",
-    outfit: "soft skirt or elegant bottoms, delicate feminine shoes, light jewelry, and a soft romantic head accessory",
-    mood: "gentle, photogenic, warm, charming, soft pastel accents",
+    outfit: "soft skirts or feminine bottoms, delicate shoes, light jewelry, and romantic finishing accessories",
+    mood: "gentle, photogenic, charming, softly feminine",
   },
   streetCool: {
     label: "Street cool",
-    outfit: "statement bottoms, bold sneakers or boots, edgy accessories, and a strong cap or hat",
-    mood: "young, energetic, confident, urban, layered streetwear styling",
+    outfit: "statement bottoms, bold sneakers or boots, edgy accessories, and strong streetwear styling",
+    mood: "young, energetic, confident, urban",
   },
   cleanMinimal: {
     label: "Clean minimal",
-    outfit: "minimal bottoms, clean shoes, restrained accessories, and a simple geometric hat or headwear option",
-    mood: "cool, sleek, calm, modern, clean lines and restrained palette",
+    outfit: "minimal bottoms, clean shoes, restrained accessories, and sharp lines",
+    mood: "cool, sleek, calm, modern",
+  },
+  frenchRelaxed: {
+    label: "French relaxed",
+    outfit: "easy trousers or skirts, soft refined shoes, understated bags, and effortless accents",
+    mood: "natural, relaxed, chic, quietly refined",
+  },
+  urbanOutdoor: {
+    label: "Urban outdoor",
+    outfit: "functional bottoms, movement-friendly shoes, practical bags, and lightweight utility details",
+    mood: "practical, layered, city-ready, lightweight technical",
+  },
+  retroAcademy: {
+    label: "Retro academy",
+    outfit: "pleated skirts or neat trousers, loafers or mary janes, scholarly bags, and vintage academic accents",
+    mood: "bookish, classic, vintage, youthful, cultured",
+  },
+  resortChic: {
+    label: "Resort chic",
+    outfit: "lightweight bottoms, elegant sandals, woven bags, and airy vacation accessories",
+    mood: "sunlit, relaxed, breezy, luxurious, travel-ready",
   },
 };
 
 const OCCASION_GUIDES = {
-  commute: "suitable for a city workday commute",
+  commute: "suitable for office commute and city workdays",
   casual: "suitable for relaxed daily wear",
-  date: "suitable for a stylish date outfit",
+  date: "suitable for photogenic date styling",
   street: "suitable for fashion-forward street styling",
+  travel: "suitable for stylish and comfortable travel wear",
+  party: "suitable for social events, dinners, and night outings",
+  campus: "suitable for youthful campus and student daily styling",
+};
+
+const MODE_GUIDES = {
+  balanced: "Prioritize versatility and easy wearability. Make Look A safe and polished, and Look B slightly more styled.",
+  camera: "Prioritize photogenic styling and stronger silhouette impact for both looks, especially Look B.",
+  slimming: "Prioritize higher waistlines, cleaner vertical proportions, and flattering visual balance.",
+  comfort: "Prioritize movement, softness, comfort, and easy all-day wear.",
+  statement: "Prioritize stronger shape, contrast, layering, and fashion-forward styling.",
+  luxury: "Prioritize premium materials, polished accessories, upscale detailing, and elegant finishing.",
+  youthful: "Prioritize freshness, energy, lightness, and a younger more lively attitude.",
+};
+
+const COLOR_STRATEGY_GUIDES = {
+  toneOnTone: "Use tonal color relationships and adjacent shades for a cohesive premium result.",
+  lightContrast: "Use light contrast and brighter accents to make the outfit cleaner and more vivid.",
+  softLuxury: "Use low-saturation elevated colors and a premium restrained palette.",
+  seasonal: "Use a seasonal color story while keeping the uploaded top as the anchor piece.",
+  cleanNeutrals: "Use clean neutrals and timeless understated colors for a versatile premium result.",
+  accentPop: "Use mostly calm tones with one controlled accent color to create a memorable focal point.",
 };
 
 const server = http.createServer(async (req, res) => {
@@ -90,23 +116,12 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "GET" && url.pathname === "/api/health") {
     sendJson(res, 200, {
       ok: true,
-      defaultProvider: DEFAULT_PROVIDER,
-      providers: {
-        relay: {
-          configured: Boolean(RELAY_CONFIG.apiKey),
-          label: PROVIDER_LABELS.relay,
-          model: RELAY_CONFIG.model,
-          baseUrl: RELAY_CONFIG.baseUrl,
-          apiMode: RELAY_CONFIG.apiMode,
-        },
-        gemini: {
-          configured: Boolean(GEMINI_CONFIG.apiKey),
-          label: PROVIDER_LABELS.gemini,
-          model: GEMINI_CONFIG.model,
-          baseUrl: GEMINI_CONFIG.baseUrl,
-          apiVersion: GEMINI_CONFIG.apiVersion,
-        },
-      },
+      provider: "relay",
+      configured: Boolean(RELAY_CONFIG.apiKey),
+      model: RELAY_CONFIG.model,
+      baseUrl: RELAY_CONFIG.baseUrl,
+      apiMode: RELAY_CONFIG.apiMode,
+      imageEditModel: RELAY_CONFIG.imageEditModel,
     });
     return;
   }
@@ -117,10 +132,7 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`Mirror Muse server running at http://localhost:${PORT}`);
   if (!RELAY_CONFIG.apiKey) {
-    console.log("Relay provider is not configured yet. IMAGE_API_KEY is missing.");
-  }
-  if (!GEMINI_CONFIG.apiKey) {
-    console.log("Gemini provider is not configured yet. GEMINI_API_KEY is missing.");
+    console.log("Image relay is not configured yet. Please set IMAGE_API_KEY.");
   }
 });
 
@@ -130,20 +142,20 @@ async function handleGenerateLook(req, res) {
     const garmentDataUrl = body?.garmentDataUrl || "";
     const style = body?.style || "quietLuxury";
     const occasion = body?.occasion || "commute";
-    const requestedProvider = normalizeProvider(body?.provider);
+    const mode = body?.mode || "balanced";
+    const colorStrategy = body?.colorStrategy || "toneOnTone";
     const mimeType = getMimeTypeFromDataUrl(garmentDataUrl);
     const imageBytes = dataUrlToBuffer(garmentDataUrl);
 
     if (!imageBytes) {
       sendJson(res, 400, {
-        error: "Please upload a valid garment image before generating a full look.",
+        error: "Please upload a valid top image before generating outfits.",
       });
       return;
     }
 
-    const prompt = buildPrompt(style, occasion);
-    const generationResult = await requestImageGeneration({
-      provider: requestedProvider,
+    const prompt = buildPrompt(style, occasion, mode, colorStrategy);
+    const generationResult = await callRelayImageGeneration({
       prompt,
       imageBytes,
       mimeType: mimeType || "image/png",
@@ -154,7 +166,6 @@ async function handleGenerateLook(req, res) {
       sendJson(res, generationResult.status || 502, {
         error: generationResult.error || "Image generation failed.",
         details: generationResult.details,
-        provider: requestedProvider,
       });
       return;
     }
@@ -163,8 +174,8 @@ async function handleGenerateLook(req, res) {
       imageDataUrl: generationResult.imageDataUrl || null,
       imageUrl: generationResult.imageUrl || null,
       revisedPrompt: generationResult.revisedPrompt || null,
-      provider: requestedProvider,
-      providerLabel: PROVIDER_LABELS[requestedProvider] || requestedProvider,
+      provider: "relay",
+      providerLabel: "ChatGPT relay image",
       apiMode: generationResult.mode || null,
     });
   } catch (error) {
@@ -174,33 +185,30 @@ async function handleGenerateLook(req, res) {
   }
 }
 
-function normalizeProvider(value) {
-  return value === "gemini" ? "gemini" : value === "relay" ? "relay" : DEFAULT_PROVIDER === "gemini" ? "gemini" : "relay";
-}
-
-function buildPrompt(styleKey, occasionKey) {
+function buildPrompt(styleKey, occasionKey, modeKey, colorStrategyKey) {
   const style = STYLE_GUIDES[styleKey] || STYLE_GUIDES.quietLuxury;
   const occasion = OCCASION_GUIDES[occasionKey] || OCCASION_GUIDES.commute;
+  const mode = MODE_GUIDES[modeKey] || MODE_GUIDES.balanced;
+  const colorStrategy = COLOR_STRATEGY_GUIDES[colorStrategyKey] || COLOR_STRATEGY_GUIDES.toneOnTone;
 
   return [
-    "Create a premium fashion lookbook image centered on the uploaded top garment.",
+    "Create one premium fashion concept board centered on the uploaded top garment.",
     "Preserve the uploaded top's color, print, texture, and silhouette as faithfully as possible.",
-    "Generate a complete coordinated outfit image that includes the top, matching bottoms, shoes, accessories, and hat or headwear.",
+    "Generate one polished comparison board that clearly presents two complete outfit solutions: Look A and Look B.",
+    "Both looks must use the same uploaded top as the hero item.",
+    "Each look must include matching bottoms, shoes, accessories, and hat or head styling suggestions.",
+    "Look A should feel practical, wearable, and easy to reference for real shopping or dressing.",
+    "Look B should feel more styled, more expressive, and better suited for social sharing or photo moments.",
     `Style direction: ${style.label}. Mood: ${style.mood}.`,
     `Outfit guidance: ${style.outfit}. Occasion: ${occasion}.`,
-    "Show the full outfit as a clean studio fashion composition on an invisible mannequin, hanger composition, or editorial outfit board.",
-    "Do not place the outfit on a real person. Do not crop out any key items.",
-    "Make the result feel like a polished e-commerce editorial or stylist moodboard, cohesive and realistic.",
-    "Avoid text, watermarks, duplicate items, extra limbs, chaotic background elements, or unrelated garments.",
+    `Mode guidance: ${mode}.`,
+    `Color strategy: ${colorStrategy}.`,
+    "Show both looks fully and clearly in the same image, separated enough to compare at a glance.",
+    "Do not place the outfit on a real person.",
+    "Use an editorial flatlay, hanger composition, invisible mannequin, or polished fashion board presentation.",
+    "Avoid text labels, watermarks, duplicate garments, chaotic backgrounds, or unrelated items.",
+    "The final result should feel like a premium stylist board prepared for a consumer deciding between two complete outfit directions.",
   ].join(" ");
-}
-
-async function requestImageGeneration({ provider, prompt, imageBytes, mimeType, garmentDataUrl }) {
-  if (provider === "gemini") {
-    return callGeminiImageGeneration({ prompt, garmentDataUrl, mimeType });
-  }
-
-  return callRelayImageGeneration({ prompt, imageBytes, mimeType, garmentDataUrl });
 }
 
 async function callRelayImageGeneration({ prompt, imageBytes, mimeType, garmentDataUrl }) {
@@ -256,104 +264,6 @@ async function callRelayImageGeneration({ prompt, imageBytes, mimeType, garmentD
     ok: false,
     status: 502,
     error: "All image generation attempts failed.",
-  };
-}
-
-async function callGeminiImageGeneration({ prompt, garmentDataUrl, mimeType }) {
-  if (!GEMINI_CONFIG.apiKey) {
-    return {
-      ok: false,
-      status: 500,
-      error: "Gemini provider is not configured. Missing GEMINI_API_KEY.",
-    };
-  }
-
-  const parsed = parseDataUrl(garmentDataUrl);
-  const endpoint = `${GEMINI_CONFIG.baseUrl.replace(/\/$/, "")}/${GEMINI_CONFIG.apiVersion}/models/${GEMINI_CONFIG.model}:generateContent`;
-
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": GEMINI_CONFIG.apiKey,
-    },
-    body: JSON.stringify({
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              inline_data: {
-                mime_type: parsed.mimeType || mimeType || "image/png",
-                data: parsed.base64Data,
-              },
-            },
-            { text: prompt },
-          ],
-        },
-      ],
-      generationConfig: {
-        responseModalities: ["IMAGE", "TEXT"],
-        responseFormat: {
-          image: {
-            aspectRatio: GEMINI_CONFIG.aspectRatio,
-            imageSize: GEMINI_CONFIG.imageSize,
-          },
-        },
-      },
-    }),
-  });
-
-  const rawText = await response.text();
-  const payload = tryParseJson(rawText);
-
-  if (!response.ok) {
-    return {
-      ok: false,
-      status: response.status,
-      error: payload?.error?.message || rawText || `Gemini request failed with ${response.status}`,
-      details: {
-        status: response.status,
-        statusText: response.statusText,
-        url: endpoint,
-        payload,
-      },
-    };
-  }
-
-  const formatted = extractGeminiSuccess(payload);
-  if (formatted) {
-    return formatted;
-  }
-
-  return {
-    ok: false,
-    status: 502,
-    error: "Gemini returned successfully, but no generated image was found.",
-    details: payload,
-  };
-}
-
-function extractGeminiSuccess(payload) {
-  const parts = payload?.candidates?.flatMap((candidate) => candidate?.content?.parts || []) || [];
-  const imagePart = parts.find((part) => part?.inlineData?.data || part?.inline_data?.data);
-  const textPart = parts.find((part) => part?.text);
-
-  if (!imagePart) {
-    return null;
-  }
-
-  const inlineImage = imagePart.inlineData || imagePart.inline_data;
-  const mimeType = inlineImage.mimeType || inlineImage.mime_type || "image/png";
-  const base64Data = inlineImage.data;
-
-  return {
-    ok: true,
-    status: 200,
-    mode: "gemini-generateContent",
-    imageDataUrl: `data:${mimeType};base64,${base64Data}`,
-    revisedPrompt: textPart?.text || null,
-    payload,
   };
 }
 
@@ -672,17 +582,6 @@ function readJsonBody(req) {
 
     req.on("error", reject);
   });
-}
-
-function parseDataUrl(dataUrl) {
-  const match = /^data:([a-zA-Z0-9/+.-]+);base64,(.+)$/.exec(dataUrl || "");
-  if (!match) {
-    throw new Error("Invalid data URL image.");
-  }
-  return {
-    mimeType: match[1],
-    base64Data: match[2],
-  };
 }
 
 function dataUrlToBuffer(dataUrl) {

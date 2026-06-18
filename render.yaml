@@ -7,8 +7,6 @@ services:
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
-      - key: DEFAULT_IMAGE_PROVIDER
-        value: relay
       - key: IMAGE_PROVIDER
         value: openai-compatible-relay
       - key: IMAGE_BASE_URL
@@ -28,16 +26,4 @@ services:
       - key: IMAGE_OUTPUT_QUALITY
         value: high
       - key: IMAGE_API_KEY
-        sync: false
-      - key: GEMINI_BASE_URL
-        value: https://generativelanguage.googleapis.com
-      - key: GEMINI_API_VERSION
-        value: v1beta
-      - key: GEMINI_IMAGE_MODEL
-        value: gemini-3.1-flash-image
-      - key: GEMINI_IMAGE_ASPECT_RATIO
-        value: 3:4
-      - key: GEMINI_IMAGE_SIZE
-        value: 1K
-      - key: GEMINI_API_KEY
         sync: false
