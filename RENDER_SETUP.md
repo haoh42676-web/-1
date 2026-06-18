@@ -20,6 +20,12 @@
 
 在 Render 后台的 `Environment` 里添加：
 
+### 通用
+
+- `DEFAULT_IMAGE_PROVIDER` = `relay`
+
+### ChatGPT 中转站
+
 - `IMAGE_PROVIDER` = `openai-compatible-relay`
 - `IMAGE_BASE_URL` = `https://gpt.fengxiaole.top/v1`
 - `IMAGE_API_MODE` = `responses`
@@ -29,7 +35,16 @@
 - `IMAGE_EDIT_MODEL` = `gpt-image-1`
 - `IMAGE_OUTPUT_SIZE` = `1024x1536`
 - `IMAGE_OUTPUT_QUALITY` = `high`
-- `IMAGE_API_KEY` = 你的真实图像 key
+- `IMAGE_API_KEY` = 你的真实中转站图像 key
+
+### Gemini 官方 API
+
+- `GEMINI_BASE_URL` = `https://generativelanguage.googleapis.com`
+- `GEMINI_API_VERSION` = `v1beta`
+- `GEMINI_IMAGE_MODEL` = `gemini-3.1-flash-image`
+- `GEMINI_IMAGE_ASPECT_RATIO` = `3:4`
+- `GEMINI_IMAGE_SIZE` = `1K`
+- `GEMINI_API_KEY` = 你的 Gemini 官方 API key
 
 Render 会自动提供 `PORT`，不用手填。
 
@@ -44,21 +59,24 @@ https://你的-render-域名/api/health
 确认返回里有：
 
 - `"ok": true`
-- `"configured": true`
+- `"providers.relay.configured": true` 或 `false`
+- `"providers.gemini.configured": true` 或 `false`
+
+你配置了哪个方案，对应的 `configured` 就应该是 `true`。
 
 ## 5. 真正验证生图
 
-部署成功不代表生图一定成功，还要再做一次真实测试：
+部署成功不代表生图一定成功，还要做两轮真实测试：
 
-1. 打开首页
-2. 上传一张上衣图
-3. 选择场景和风格
-4. 点击生成
+1. 用 `ChatGPT 中转站` 方案上传上衣并出图
+2. 切到 `Gemini 官方 API` 方案再出图
 
-如果失败，优先看这几类问题：
+如果失败，优先看这些错误：
 
 - `No available compatible accounts`
 - `Upstream service temporarily unavailable`
 - `missing IMAGE_API_KEY`
+- `missing GEMINI_API_KEY`
+- `quota / rate limit / resource exhausted`
 
-前两种通常不是页面代码问题，而是中转站本身当前没有可用图像能力。
+前两种通常不是页面代码问题，而是你当前接入的服务不稳定或额度不足。

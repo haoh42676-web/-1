@@ -11,15 +11,15 @@
     <header class="hero">
       <div class="hero-copy">
         <p class="hero-kicker">Mirror Muse / Full Look Generator</p>
-        <h1>上传一件上衣，生成整套穿搭建议和整图</h1>
+        <h1>上传一件上衣，生成整套穿搭建议和效果图</h1>
         <p class="hero-text">
-          上传一张上衣图片，选择场景和风格，系统会自动补全裤子、鞋子、配饰和帽子，并尝试生成一张完整的整套穿搭图。
+          上传上衣图片，选择场景、风格和生图方案，系统会自动补全裤子、鞋子、配饰和帽子，并生成一张完整的整套穿搭图。
         </p>
       </div>
       <div class="hero-tags">
         <span>上传上衣</span>
         <span>选择风格</span>
-        <span>输出整套效果</span>
+        <span>输出整套搭配</span>
       </div>
     </header>
 
@@ -28,10 +28,10 @@
         <div class="section-head">
           <div>
             <p class="section-label">Input</p>
-            <h2>先确定主单品和风格方向</h2>
+            <h2>先确定主单品、风格和生成方案</h2>
           </div>
           <p class="section-copy">
-            这一版不做上身试穿，重点是让用户快速拿到完整穿搭方案和整套展示图。
+            这一版不做真人上身试穿，重点是让用户快速拿到完整穿搭方案和整套展示图。
           </p>
         </div>
 
@@ -66,7 +66,7 @@
 
           <article class="input-card input-card-wide">
             <div class="card-head">
-              <h3>3. 选择风格</h3>
+              <h3>3. 选择穿搭风格</h3>
               <span>系统会按风格补齐整套</span>
             </div>
             <div class="style-grid" id="styleGrid">
@@ -91,8 +91,25 @@
 
           <article class="input-card">
             <div class="card-head">
-              <h3>4. 当前选择</h3>
-              <span>消费者视角</span>
+              <h3>4. 选择生图方案</h3>
+              <span>可切换不同模型</span>
+            </div>
+            <label class="field-block">
+              <span>图片生成提供方</span>
+              <select id="providerInput">
+                <option value="relay" selected>ChatGPT 中转站</option>
+                <option value="gemini">Gemini 官方 API</option>
+              </select>
+            </label>
+            <p class="provider-note" id="providerHint">
+              默认使用 ChatGPT 中转站，适合你当前已有的中转配置。
+            </p>
+          </article>
+
+          <article class="input-card">
+            <div class="card-head">
+              <h3>5. 当前选择</h3>
+              <span>普通消费者视角</span>
             </div>
             <div class="selected-style">
               <strong id="selectedStyleName">静奢通勤</strong>
@@ -100,9 +117,9 @@
             </div>
           </article>
 
-          <article class="input-card">
+          <article class="input-card input-card-wide">
             <div class="card-head">
-              <h3>5. 生成整套图片</h3>
+              <h3>6. 生成整套图片</h3>
               <span>输出完整 look 图</span>
             </div>
             <div class="action-row">

@@ -1,19 +1,24 @@
 # Mirror Muse
 
-一个用于“上传上衣图片，生成整套穿搭建议和整图”的网页应用。
+一个用于“上传上衣图片，生成整套穿搭建议和整图”的网页应用。  
+现在支持两种可切换的真实生图方案：
+
+- `ChatGPT 中转站`
+- `Gemini 官方 API`
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/haoh42676-web/-1)
 
 一键部署入口：
 
-https://render.com/deploy?repo=https://github.com/haoh42676-web/-1
+[https://render.com/deploy?repo=https://github.com/haoh42676-web/-1](https://render.com/deploy?repo=https://github.com/haoh42676-web/-1)
 
 ## 当前能力
 
 - 上传上衣图片
 - 选择场景和风格
 - 自动补全裤子、鞋子、配饰、帽子建议
-- 通过后端调用 OpenAI-compatible 图像接口生成整套穿搭图
+- 选择不同生图提供方生成整套穿搭图
+- 通过后端安全保存 API Key，适合 Render 部署
 
 ## 项目结构
 
@@ -28,14 +33,14 @@ https://render.com/deploy?repo=https://github.com/haoh42676-web/-1
 ## 本地运行
 
 1. 复制 `.env.example` 为 `.env.local`
-2. 在 `.env.local` 中填写你自己的图像接口配置
-3. 运行：
+2. 按需填写你的 `IMAGE_API_KEY` 和 / 或 `GEMINI_API_KEY`
+3. 启动服务
 
 ```powershell
 node server.js
 ```
 
-4. 打开：
+4. 打开
 
 ```text
 http://localhost:3000
@@ -44,8 +49,10 @@ http://localhost:3000
 ## 环境变量
 
 ```text
+DEFAULT_IMAGE_PROVIDER=relay
+
 IMAGE_PROVIDER=openai-compatible-relay
-IMAGE_API_KEY=your-api-key
+IMAGE_API_KEY=your-relay-key
 IMAGE_BASE_URL=https://gpt.fengxiaole.top/v1
 IMAGE_API_MODE=responses
 IMAGE_RESPONSE_PATH=/responses
@@ -54,53 +61,43 @@ IMAGE_MODEL=gpt-5.4
 IMAGE_EDIT_MODEL=gpt-image-1
 IMAGE_OUTPUT_SIZE=1024x1536
 IMAGE_OUTPUT_QUALITY=high
+
+GEMINI_API_KEY=your-gemini-key
+GEMINI_BASE_URL=https://generativelanguage.googleapis.com
+GEMINI_API_VERSION=v1beta
+GEMINI_IMAGE_MODEL=gemini-3.1-flash-image
+GEMINI_IMAGE_ASPECT_RATIO=3:4
+GEMINI_IMAGE_SIZE=1K
+
 PORT=3000
 ```
 
-## 给朋友使用的正确方式
+## Render 部署说明
 
 这个项目不是纯静态网页，不能只靠 GitHub Pages 直接运行。
 
 原因：
 
-1. 需要 Node 后端处理上传和转发图像请求
-2. 需要服务端保存 `IMAGE_API_KEY`，不能暴露到前端
+1. 需要 Node 后端处理上传和转发生图请求
+2. 需要服务端保存 `IMAGE_API_KEY` / `GEMINI_API_KEY`
+3. 需要后端统一切换不同生图提供方
 
-所以如果你想让朋友直接打开链接使用，正确方式是：
+部署时建议：
 
 1. 代码上传到 GitHub
-2. 再部署到 Render、Railway 或其他支持 Node 的平台
-3. 在部署平台里配置环境变量
+2. 用 Render 部署 Web Service
+3. 在 Render 里配置环境变量
+4. 部署完成后分别测试 `relay` 和 `gemini` 两种模式
 
 ## 生图功能现状
 
-代码层面已经支持两种调用路径：
-
-- `Responses API`
-- `/images/edits` / `/images/generations` 兼容回退
-
-但你当前使用的中转站在真实联调时返回过这些错误：
-
-- `502 Upstream service temporarily unavailable`
-- `503 No available compatible accounts`
-
-这说明：
-
-- 前端和后端链路已经接好
-- 但当前中转站的图像上游并不稳定
-- 所以上线后“页面能打开”不等于“生图一定成功”
-
-## 推荐上线方式
-
-如果你要给朋友稳定使用，建议：
-
-1. 先上传 GitHub
-2. 再部署到 Render
-3. 在 Render 配置一个稳定可用的图像 API
-4. 部署完成后再做一次真实上传测试
+- `ChatGPT 中转站` 路线依赖你配置的中转服务稳定性
+- `Gemini 官方 API` 路线依赖你自己的 `GEMINI_API_KEY`
+- 页面已经支持用户手动切换两种方案
+- `/api/health` 会显示两个提供方是否已配置
 
 ## 安全提醒
 
-- 不要把真实 API key 提交到 GitHub
-- `.env.local` 只保留在你自己电脑上
+- 不要把真实 API Key 提交到 GitHub
+- `.env.local` 只保留在你自己的电脑上
 - 仓库里只提交 `.env.example`

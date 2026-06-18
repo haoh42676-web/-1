@@ -76,11 +76,23 @@ const occasionLabels = {
   street: "街头",
 };
 
+const providerProfiles = {
+  relay: {
+    label: "ChatGPT 中转站",
+    hint: "默认使用 ChatGPT 中转站，适合你当前已有的中转配置。",
+  },
+  gemini: {
+    label: "Gemini 官方 API",
+    hint: "Gemini 走官方接口，更适合单独配置稳定的线上生图能力。",
+  },
+};
+
 const state = {
   garmentFile: null,
   garmentPreviewUrl: "",
   style: "quietLuxury",
   occasion: "commute",
+  provider: "relay",
   generated: false,
   lastError: "",
 };
@@ -88,6 +100,8 @@ const state = {
 const garmentInput = document.querySelector("#garmentInput");
 const garmentStatus = document.querySelector("#garmentStatus");
 const occasionInput = document.querySelector("#occasionInput");
+const providerInput = document.querySelector("#providerInput");
+const providerHint = document.querySelector("#providerHint");
 const styleGrid = document.querySelector("#styleGrid");
 const generateButton = document.querySelector("#generateButton");
 const resetButton = document.querySelector("#resetButton");
@@ -117,8 +131,12 @@ const previewPlaceholder = document.querySelector("#previewPlaceholder");
 garmentInput.addEventListener("change", (event) => loadGarment(event.target.files?.[0]));
 occasionInput.addEventListener("change", () => {
   state.occasion = occasionInput.value;
-  state.generated = false;
-  state.lastError = "";
+  clearGenerationState();
+  syncUI();
+});
+providerInput.addEventListener("change", () => {
+  state.provider = providerInput.value;
+  clearGenerationState();
   syncUI();
 });
 styleGrid.addEventListener("click", onStylePick);
@@ -138,12 +156,9 @@ function loadGarment(file) {
 
   state.garmentFile = file;
   state.garmentPreviewUrl = URL.createObjectURL(file);
-  state.generated = false;
-  state.lastError = "";
   garmentStatus.textContent = file.name;
-  generatedImage.classList.add("hidden");
-  generatedImage.removeAttribute("src");
-  previewPlaceholder.classList.remove("hidden");
+  clearGenerationState();
+  resetImageStage();
   syncUI();
 }
 
@@ -154,8 +169,7 @@ function onStylePick(event) {
   }
 
   state.style = button.dataset.style;
-  state.generated = false;
-  state.lastError = "";
+  clearGenerationState();
   syncStyleSelection();
   syncUI();
 }
@@ -172,8 +186,8 @@ async function generateLookImage() {
   lookForm.classList.add("is-loading");
   state.lastError = "";
   previewState.textContent = "生成中";
-  previewHeadline.textContent = "正在调用真实模型生成整套穿搭图";
-  previewCopy.textContent = "这一步会把上衣图片和风格要求发送给后端，再由后端请求图像模型。";
+  previewHeadline.textContent = `正在调用 ${providerProfiles[state.provider].label} 生成整套穿搭图`;
+  previewCopy.textContent = "系统会把上衣图片和风格要求一起发给后端，再由后端调用对应的真实生图模型。";
 
   try {
     const garmentDataUrl = await readFileAsDataUrl(state.garmentFile);
@@ -186,12 +200,13 @@ async function generateLookImage() {
         garmentDataUrl,
         style: state.style,
         occasion: state.occasion,
+        provider: state.provider,
       }),
     });
 
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(toUserError(payload));
+      throw new Error(toUserError(payload, state.provider));
     }
 
     const imageSrc = payload.imageDataUrl || payload.imageUrl;
@@ -205,7 +220,7 @@ async function generateLookImage() {
     state.generated = true;
     state.lastError = "";
     previewState.textContent = "已生成";
-    previewHeadline.textContent = "模型已经生成整套 look 图";
+    previewHeadline.textContent = `模型已经生成整套 look 图${payload.providerLabel ? ` - ${payload.providerLabel}` : ""}`;
     previewCopy.textContent = "当前展示的是后端返回的真实图片，不再是前端模拟图。";
     syncUI();
   } catch (error) {
@@ -224,6 +239,7 @@ function resetAll() {
   garmentInput.value = "";
   garmentStatus.textContent = "未选择";
   occasionInput.value = "commute";
+  providerInput.value = "relay";
 
   if (state.garmentPreviewUrl) {
     URL.revokeObjectURL(state.garmentPreviewUrl);
@@ -233,15 +249,23 @@ function resetAll() {
   state.garmentPreviewUrl = "";
   state.style = "quietLuxury";
   state.occasion = "commute";
-  state.generated = false;
-  state.lastError = "";
-
-  generatedImage.classList.add("hidden");
-  generatedImage.removeAttribute("src");
-  previewPlaceholder.classList.remove("hidden");
+  state.provider = "relay";
+  clearGenerationState();
+  resetImageStage();
 
   syncStyleSelection();
   syncUI();
+}
+
+function clearGenerationState() {
+  state.generated = false;
+  state.lastError = "";
+}
+
+function resetImageStage() {
+  generatedImage.classList.add("hidden");
+  generatedImage.removeAttribute("src");
+  previewPlaceholder.classList.remove("hidden");
 }
 
 function syncStyleSelection() {
@@ -253,24 +277,26 @@ function syncStyleSelection() {
 function syncUI() {
   const look = getLook();
   const profile = styleProfiles[state.style];
+  const provider = providerProfiles[state.provider];
 
   syncStyleSelection();
 
   selectedStyleName.textContent = profile.name;
   selectedStyleText.textContent = profile.shortText;
+  providerHint.textContent = provider.hint;
   resultVibe.textContent = profile.name;
   resultNarrative.textContent = profile.narrative;
   resultBottom.textContent = look.bottom;
-  resultBottomText.textContent = `推荐 ${look.bottom}，让整套在 ${occasionLabels[state.occasion]} 场景里更完整。`;
+  resultBottomText.textContent = `推荐 ${look.bottom}，让整套在${occasionLabels[state.occasion]}场景里更完整。`;
   resultShoes.textContent = look.shoes;
-  resultShoesText.textContent = `${look.shoes} 负责把风格真正落地，看起来才像一整套。`;
+  resultShoesText.textContent = `${look.shoes}负责把风格真正落地，看起来才像一整套。`;
   resultAccessory.textContent = profile.accessory;
   resultAccessoryText.textContent = profile.accessoryText;
   resultHat.textContent = profile.hat;
   resultHatText.textContent = profile.hatText;
   resultPaletteText.textContent = profile.paletteText;
   resultIntro.textContent = state.generated
-    ? `已经根据上传的上衣、${profile.name} 风格和 ${occasionLabels[state.occasion]} 场景生成整套建议与图片。`
+    ? `已经根据上传的上衣、${profile.name}风格、${occasionLabels[state.occasion]}场景，并使用 ${provider.label} 生成整套建议与图片。`
     : "先有完整 look，用户才知道这件上衣最后会被搭成什么样。";
 
   generateButton.textContent = state.lastError ? "重新生成整套穿搭图" : "生成整套穿搭图";
@@ -286,7 +312,7 @@ function syncUI() {
         ? "先上传上衣，再生成完整 look"
         : "先上传一张上衣图片";
       previewCopy.textContent = state.garmentFile
-        ? "系统会围绕上传的上衣，按风格自动补出裤子、鞋子、配饰和帽子。"
+        ? `系统会围绕上传的上衣，按风格自动补出裤子、鞋子、配饰和帽子，并使用 ${provider.label} 出图。`
         : "图片会发送到后端，再由后端调用真实图像模型。";
     }
   }
@@ -298,19 +324,29 @@ function getLook() {
   return styleProfiles[state.style].pieces[state.occasion];
 }
 
-function toUserError(payload) {
+function toUserError(payload, provider) {
   const message = payload?.error || "图片生成失败。";
 
   if (/No available compatible accounts/i.test(message)) {
-    return "当前图像中转站没有可用账号，页面本身正常，但这一刻无法出图。请点击“重新生成整套穿搭图”稍后再试，或更换可用的图像接口。";
+    return "当前中转站没有可用图像账号，页面本身正常，但这一刻无法出图。请稍后重试，或切换到 Gemini 官方 API。";
   }
 
   if (/temporarily unavailable|upstream/i.test(message)) {
     return "图像服务上游暂时不可用。你可以点击“重新生成整套穿搭图”再试一次。";
   }
 
-  if (/missing image_api_key/i.test(message)) {
-    return "服务端还没有配置图像 API Key，请先在部署平台里补上环境变量。";
+  if (/missing image_api_key|relay provider is not configured/i.test(message)) {
+    return "服务器还没有配置 ChatGPT 中转站的图像 Key，请先在部署平台补上相关环境变量。";
+  }
+
+  if (/missing gemini_api_key|gemini provider is not configured/i.test(message)) {
+    return "服务器还没有配置 Gemini 官方 API Key，请先在部署平台补上 `GEMINI_API_KEY`。";
+  }
+
+  if (/quota|rate limit|resource exhausted/i.test(message)) {
+    return provider === "gemini"
+      ? "Gemini 当前额度不足或触发限流，请稍后再试，或切回 ChatGPT 中转站。"
+      : "当前生图通道额度不足或触发限流，请稍后再试。";
   }
 
   return `${message} 你可以点击“重新生成整套穿搭图”再试一次。`;

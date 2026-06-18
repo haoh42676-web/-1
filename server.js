@@ -6,8 +6,10 @@ const { URL } = require("url");
 loadDotEnv(path.join(__dirname, ".env.local"));
 
 const PORT = Number(process.env.PORT || 3000);
-const IMAGE_CONFIG = {
-  provider: process.env.IMAGE_PROVIDER || "openai-compatible-relay",
+const DEFAULT_PROVIDER = process.env.DEFAULT_IMAGE_PROVIDER || "relay";
+
+const RELAY_CONFIG = {
+  provider: "openai-compatible-relay",
   apiKey: process.env.IMAGE_API_KEY || process.env.OPENAI_API_KEY || "",
   baseUrl: process.env.IMAGE_BASE_URL || "https://gpt.fengxiaole.top/v1",
   apiMode: process.env.IMAGE_API_MODE || "responses",
@@ -18,6 +20,16 @@ const IMAGE_CONFIG = {
   outputSize: process.env.IMAGE_OUTPUT_SIZE || "1024x1536",
   outputQuality: process.env.IMAGE_OUTPUT_QUALITY || "high",
 };
+
+const GEMINI_CONFIG = {
+  apiKey: process.env.GEMINI_API_KEY || "",
+  baseUrl: process.env.GEMINI_BASE_URL || "https://generativelanguage.googleapis.com",
+  apiVersion: process.env.GEMINI_API_VERSION || "v1beta",
+  model: process.env.GEMINI_IMAGE_MODEL || "gemini-3.1-flash-image",
+  aspectRatio: process.env.GEMINI_IMAGE_ASPECT_RATIO || "3:4",
+  imageSize: process.env.GEMINI_IMAGE_SIZE || "1K",
+};
+
 const PUBLIC_DIR = __dirname;
 
 const MIME_TYPES = {
@@ -30,6 +42,11 @@ const MIME_TYPES = {
   ".jpeg": "image/jpeg",
   ".webp": "image/webp",
   ".svg": "image/svg+xml",
+};
+
+const PROVIDER_LABELS = {
+  relay: "ChatGPT 中转站",
+  gemini: "Gemini 官方 API",
 };
 
 const STYLE_GUIDES = {
@@ -73,13 +90,23 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "GET" && url.pathname === "/api/health") {
     sendJson(res, 200, {
       ok: true,
-      provider: IMAGE_CONFIG.provider,
-      model: IMAGE_CONFIG.model,
-      configured: Boolean(IMAGE_CONFIG.apiKey),
-      baseUrl: IMAGE_CONFIG.baseUrl,
-      apiMode: IMAGE_CONFIG.apiMode,
-      responsePath: IMAGE_CONFIG.responsePath,
-      imagePath: IMAGE_CONFIG.imagePath,
+      defaultProvider: DEFAULT_PROVIDER,
+      providers: {
+        relay: {
+          configured: Boolean(RELAY_CONFIG.apiKey),
+          label: PROVIDER_LABELS.relay,
+          model: RELAY_CONFIG.model,
+          baseUrl: RELAY_CONFIG.baseUrl,
+          apiMode: RELAY_CONFIG.apiMode,
+        },
+        gemini: {
+          configured: Boolean(GEMINI_CONFIG.apiKey),
+          label: PROVIDER_LABELS.gemini,
+          model: GEMINI_CONFIG.model,
+          baseUrl: GEMINI_CONFIG.baseUrl,
+          apiVersion: GEMINI_CONFIG.apiVersion,
+        },
+      },
     });
     return;
   }
@@ -89,24 +116,21 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`Mirror Muse server running at http://localhost:${PORT}`);
-  if (!IMAGE_CONFIG.apiKey) {
-    console.log("IMAGE_API_KEY is not set. Image generation requests will fail until it is configured.");
+  if (!RELAY_CONFIG.apiKey) {
+    console.log("Relay provider is not configured yet. IMAGE_API_KEY is missing.");
+  }
+  if (!GEMINI_CONFIG.apiKey) {
+    console.log("Gemini provider is not configured yet. GEMINI_API_KEY is missing.");
   }
 });
 
 async function handleGenerateLook(req, res) {
   try {
-    if (!IMAGE_CONFIG.apiKey) {
-      sendJson(res, 500, {
-        error: "Server is missing IMAGE_API_KEY. Please configure it before generating images.",
-      });
-      return;
-    }
-
     const body = await readJsonBody(req);
     const garmentDataUrl = body?.garmentDataUrl || "";
     const style = body?.style || "quietLuxury";
     const occasion = body?.occasion || "commute";
+    const requestedProvider = normalizeProvider(body?.provider);
     const mimeType = getMimeTypeFromDataUrl(garmentDataUrl);
     const imageBytes = dataUrlToBuffer(garmentDataUrl);
 
@@ -119,6 +143,7 @@ async function handleGenerateLook(req, res) {
 
     const prompt = buildPrompt(style, occasion);
     const generationResult = await requestImageGeneration({
+      provider: requestedProvider,
       prompt,
       imageBytes,
       mimeType: mimeType || "image/png",
@@ -129,39 +154,28 @@ async function handleGenerateLook(req, res) {
       sendJson(res, generationResult.status || 502, {
         error: generationResult.error || "Image generation failed.",
         details: generationResult.details,
+        provider: requestedProvider,
       });
       return;
     }
 
-    const firstImage = generationResult.payload?.data?.[0];
-
-    if (firstImage?.b64_json) {
-      sendJson(res, 200, {
-        imageDataUrl: `data:image/png;base64,${firstImage.b64_json}`,
-        revisedPrompt: firstImage.revised_prompt || null,
-        apiMode: generationResult.mode,
-      });
-      return;
-    }
-
-    if (firstImage?.url) {
-      sendJson(res, 200, {
-        imageUrl: firstImage.url,
-        revisedPrompt: firstImage.revised_prompt || null,
-        apiMode: generationResult.mode,
-      });
-      return;
-    }
-
-    sendJson(res, 502, {
-      error: "The model returned a response, but no image payload was found.",
-      details: generationResult.payload,
+    sendJson(res, 200, {
+      imageDataUrl: generationResult.imageDataUrl || null,
+      imageUrl: generationResult.imageUrl || null,
+      revisedPrompt: generationResult.revisedPrompt || null,
+      provider: requestedProvider,
+      providerLabel: PROVIDER_LABELS[requestedProvider] || requestedProvider,
+      apiMode: generationResult.mode || null,
     });
   } catch (error) {
     sendJson(res, 500, {
       error: error instanceof Error ? error.message : "Unexpected server error.",
     });
   }
+}
+
+function normalizeProvider(value) {
+  return value === "gemini" ? "gemini" : value === "relay" ? "relay" : DEFAULT_PROVIDER === "gemini" ? "gemini" : "relay";
 }
 
 function buildPrompt(styleKey, occasionKey) {
@@ -171,18 +185,34 @@ function buildPrompt(styleKey, occasionKey) {
   return [
     "Create a premium fashion lookbook image centered on the uploaded top garment.",
     "Preserve the uploaded top's color, print, texture, and silhouette as faithfully as possible.",
-    "Generate a complete coordinated outfit image that includes the top, matching bottoms, shoes, accessories, and hat/headwear.",
+    "Generate a complete coordinated outfit image that includes the top, matching bottoms, shoes, accessories, and hat or headwear.",
     `Style direction: ${style.label}. Mood: ${style.mood}.`,
     `Outfit guidance: ${style.outfit}. Occasion: ${occasion}.`,
-    "Show the full outfit as a clean studio fashion composition on an invisible mannequin or editorial outfit board.",
+    "Show the full outfit as a clean studio fashion composition on an invisible mannequin, hanger composition, or editorial outfit board.",
     "Do not place the outfit on a real person. Do not crop out any key items.",
     "Make the result feel like a polished e-commerce editorial or stylist moodboard, cohesive and realistic.",
-    "Avoid text, watermarks, duplicate items, extra limbs, or chaotic background elements.",
+    "Avoid text, watermarks, duplicate items, extra limbs, chaotic background elements, or unrelated garments.",
   ].join(" ");
 }
 
-async function requestImageGeneration({ prompt, imageBytes, mimeType, garmentDataUrl }) {
-  if (IMAGE_CONFIG.apiMode === "responses") {
+async function requestImageGeneration({ provider, prompt, imageBytes, mimeType, garmentDataUrl }) {
+  if (provider === "gemini") {
+    return callGeminiImageGeneration({ prompt, garmentDataUrl, mimeType });
+  }
+
+  return callRelayImageGeneration({ prompt, imageBytes, mimeType, garmentDataUrl });
+}
+
+async function callRelayImageGeneration({ prompt, imageBytes, mimeType, garmentDataUrl }) {
+  if (!RELAY_CONFIG.apiKey) {
+    return {
+      ok: false,
+      status: 500,
+      error: "Relay provider is not configured. Missing IMAGE_API_KEY.",
+    };
+  }
+
+  if (RELAY_CONFIG.apiMode === "responses") {
     return callResponsesImageGeneration({
       prompt,
       garmentDataUrl,
@@ -190,7 +220,7 @@ async function requestImageGeneration({ prompt, imageBytes, mimeType, garmentDat
   }
 
   const attempts = [
-    { mode: "edit", path: IMAGE_CONFIG.imagePath || "/images/edits" },
+    { mode: "edit", path: RELAY_CONFIG.imagePath || "/images/edits" },
     { mode: "generate", path: "/images/generations" },
   ];
 
@@ -203,7 +233,7 @@ async function requestImageGeneration({ prompt, imageBytes, mimeType, garmentDat
         : await callImageGenerationEndpoint({ prompt, pathOverride: attempt.path });
 
       if (result.ok) {
-        return { ...result, mode: attempt.mode };
+        return extractRelaySuccess(result, attempt.mode);
       }
 
       lastFailure = { ...result, mode: attempt.mode };
@@ -229,21 +259,152 @@ async function requestImageGeneration({ prompt, imageBytes, mimeType, garmentDat
   };
 }
 
+async function callGeminiImageGeneration({ prompt, garmentDataUrl, mimeType }) {
+  if (!GEMINI_CONFIG.apiKey) {
+    return {
+      ok: false,
+      status: 500,
+      error: "Gemini provider is not configured. Missing GEMINI_API_KEY.",
+    };
+  }
+
+  const parsed = parseDataUrl(garmentDataUrl);
+  const endpoint = `${GEMINI_CONFIG.baseUrl.replace(/\/$/, "")}/${GEMINI_CONFIG.apiVersion}/models/${GEMINI_CONFIG.model}:generateContent`;
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": GEMINI_CONFIG.apiKey,
+    },
+    body: JSON.stringify({
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              inline_data: {
+                mime_type: parsed.mimeType || mimeType || "image/png",
+                data: parsed.base64Data,
+              },
+            },
+            { text: prompt },
+          ],
+        },
+      ],
+      generationConfig: {
+        responseModalities: ["IMAGE", "TEXT"],
+        responseFormat: {
+          image: {
+            aspectRatio: GEMINI_CONFIG.aspectRatio,
+            imageSize: GEMINI_CONFIG.imageSize,
+          },
+        },
+      },
+    }),
+  });
+
+  const rawText = await response.text();
+  const payload = tryParseJson(rawText);
+
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      error: payload?.error?.message || rawText || `Gemini request failed with ${response.status}`,
+      details: {
+        status: response.status,
+        statusText: response.statusText,
+        url: endpoint,
+        payload,
+      },
+    };
+  }
+
+  const formatted = extractGeminiSuccess(payload);
+  if (formatted) {
+    return formatted;
+  }
+
+  return {
+    ok: false,
+    status: 502,
+    error: "Gemini returned successfully, but no generated image was found.",
+    details: payload,
+  };
+}
+
+function extractGeminiSuccess(payload) {
+  const parts = payload?.candidates?.flatMap((candidate) => candidate?.content?.parts || []) || [];
+  const imagePart = parts.find((part) => part?.inlineData?.data || part?.inline_data?.data);
+  const textPart = parts.find((part) => part?.text);
+
+  if (!imagePart) {
+    return null;
+  }
+
+  const inlineImage = imagePart.inlineData || imagePart.inline_data;
+  const mimeType = inlineImage.mimeType || inlineImage.mime_type || "image/png";
+  const base64Data = inlineImage.data;
+
+  return {
+    ok: true,
+    status: 200,
+    mode: "gemini-generateContent",
+    imageDataUrl: `data:${mimeType};base64,${base64Data}`,
+    revisedPrompt: textPart?.text || null,
+    payload,
+  };
+}
+
+function extractRelaySuccess(result, mode) {
+  const firstImage = result.payload?.data?.[0];
+
+  if (firstImage?.b64_json) {
+    return {
+      ok: true,
+      status: result.status,
+      mode,
+      imageDataUrl: `data:image/png;base64,${firstImage.b64_json}`,
+      revisedPrompt: firstImage.revised_prompt || null,
+      payload: result.payload,
+    };
+  }
+
+  if (firstImage?.url) {
+    return {
+      ok: true,
+      status: result.status,
+      mode,
+      imageUrl: firstImage.url,
+      revisedPrompt: firstImage.revised_prompt || null,
+      payload: result.payload,
+    };
+  }
+
+  return {
+    ok: false,
+    status: 502,
+    error: "The model returned a response, but no image payload was found.",
+    details: result.payload,
+  };
+}
+
 async function callImageEditEndpoint({ prompt, imageBytes, mimeType, pathOverride }) {
   const imageBlob = new Blob([imageBytes], { type: mimeType });
   const form = new FormData();
 
-  form.append("model", IMAGE_CONFIG.imageEditModel);
+  form.append("model", RELAY_CONFIG.imageEditModel);
   form.append("prompt", prompt);
-  form.append("size", IMAGE_CONFIG.outputSize);
-  form.append("quality", IMAGE_CONFIG.outputQuality);
+  form.append("size", RELAY_CONFIG.outputSize);
+  form.append("quality", RELAY_CONFIG.outputQuality);
   form.append("response_format", "b64_json");
   form.append("image", imageBlob, `garment${extensionFromMimeType(mimeType)}`);
 
   return callRelayEndpoint({
     path: pathOverride,
     headers: {
-      Authorization: `Bearer ${IMAGE_CONFIG.apiKey}`,
+      Authorization: `Bearer ${RELAY_CONFIG.apiKey}`,
     },
     body: form,
   });
@@ -253,26 +414,26 @@ async function callImageGenerationEndpoint({ prompt, pathOverride }) {
   return callRelayEndpoint({
     path: pathOverride,
     headers: {
-      Authorization: `Bearer ${IMAGE_CONFIG.apiKey}`,
+      Authorization: `Bearer ${RELAY_CONFIG.apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: IMAGE_CONFIG.imageEditModel,
+      model: RELAY_CONFIG.imageEditModel,
       prompt,
-      size: IMAGE_CONFIG.outputSize,
-      quality: IMAGE_CONFIG.outputQuality,
+      size: RELAY_CONFIG.outputSize,
+      quality: RELAY_CONFIG.outputQuality,
       response_format: "b64_json",
     }),
   });
 }
 
 async function callResponsesImageGeneration({ prompt, garmentDataUrl }) {
-  const targetPath = IMAGE_CONFIG.responsePath || "/responses";
+  const targetPath = RELAY_CONFIG.responsePath || "/responses";
   const attempts = [
     {
       mode: "responses-tool-configured",
       body: {
-        model: IMAGE_CONFIG.model,
+        model: RELAY_CONFIG.model,
         input: [
           {
             role: "user",
@@ -285,8 +446,8 @@ async function callResponsesImageGeneration({ prompt, garmentDataUrl }) {
         tools: [
           {
             type: "image_generation",
-            size: IMAGE_CONFIG.outputSize,
-            quality: IMAGE_CONFIG.outputQuality,
+            size: RELAY_CONFIG.outputSize,
+            quality: RELAY_CONFIG.outputQuality,
           },
         ],
       },
@@ -294,7 +455,7 @@ async function callResponsesImageGeneration({ prompt, garmentDataUrl }) {
     {
       mode: "responses-tool-minimal",
       body: {
-        model: IMAGE_CONFIG.model,
+        model: RELAY_CONFIG.model,
         input: [
           {
             role: "user",
@@ -315,7 +476,7 @@ async function callResponsesImageGeneration({ prompt, garmentDataUrl }) {
     const result = await callRelayEndpoint({
       path: targetPath,
       headers: {
-        Authorization: `Bearer ${IMAGE_CONFIG.apiKey}`,
+        Authorization: `Bearer ${RELAY_CONFIG.apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(attempt.body),
@@ -335,15 +496,9 @@ async function callResponsesImageGeneration({ prompt, garmentDataUrl }) {
         ok: true,
         status: result.status,
         mode: attempt.mode,
-        payload: {
-          data: [
-            {
-              b64_json: imageCall.imageBase64,
-              revised_prompt: imageCall.revisedPrompt || null,
-            },
-          ],
-          raw: result.payload,
-        },
+        imageDataUrl: `data:image/png;base64,${imageCall.imageBase64}`,
+        revisedPrompt: imageCall.revisedPrompt || null,
+        payload: result.payload,
       };
     }
 
@@ -366,7 +521,7 @@ async function callResponsesImageGeneration({ prompt, garmentDataUrl }) {
 }
 
 async function callRelayEndpoint({ path: pathOverride, headers, body }) {
-  const targetUrl = `${IMAGE_CONFIG.baseUrl.replace(/\/$/, "")}${pathOverride}`;
+  const targetUrl = `${RELAY_CONFIG.baseUrl.replace(/\/$/, "")}${pathOverride}`;
   const response = await fetch(targetUrl, {
     method: "POST",
     headers,
@@ -517,6 +672,17 @@ function readJsonBody(req) {
 
     req.on("error", reject);
   });
+}
+
+function parseDataUrl(dataUrl) {
+  const match = /^data:([a-zA-Z0-9/+.-]+);base64,(.+)$/.exec(dataUrl || "");
+  if (!match) {
+    throw new Error("Invalid data URL image.");
+  }
+  return {
+    mimeType: match[1],
+    base64Data: match[2],
+  };
 }
 
 function dataUrlToBuffer(dataUrl) {
