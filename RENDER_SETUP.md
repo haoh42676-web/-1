@@ -3,7 +3,7 @@
 ## 1. 连接仓库
 
 1. 打开 Render
-2. 选择 `New +`
+2. 点击 `New +`
 3. 选择 `Web Service`
 4. 连接 GitHub 仓库 `haoh42676-web/-1`
 
@@ -14,7 +14,7 @@
 - Build Command: `echo "No build step required"`
 - Start Command: `npm start`
 
-如果 Render 识别到了仓库里的 `render.yaml`，这些通常会自动带出。
+如果 Render 识别到了仓库里的 `render.yaml`，这些通常会自动带出来。
 
 ## 3. 必填环境变量
 

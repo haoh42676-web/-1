@@ -2,6 +2,12 @@
 
 一个用于“上传上衣图片，生成整套穿搭建议和整图”的网页应用。
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/haoh42676-web/-1)
+
+一键部署入口：
+
+https://render.com/deploy?repo=https://github.com/haoh42676-web/-1
+
 ## 当前能力
 
 - 上传上衣图片

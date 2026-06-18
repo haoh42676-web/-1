@@ -82,6 +82,7 @@ const state = {
   style: "quietLuxury",
   occasion: "commute",
   generated: false,
+  lastError: "",
 };
 
 const garmentInput = document.querySelector("#garmentInput");
@@ -117,6 +118,7 @@ garmentInput.addEventListener("change", (event) => loadGarment(event.target.file
 occasionInput.addEventListener("change", () => {
   state.occasion = occasionInput.value;
   state.generated = false;
+  state.lastError = "";
   syncUI();
 });
 styleGrid.addEventListener("click", onStylePick);
@@ -137,6 +139,7 @@ function loadGarment(file) {
   state.garmentFile = file;
   state.garmentPreviewUrl = URL.createObjectURL(file);
   state.generated = false;
+  state.lastError = "";
   garmentStatus.textContent = file.name;
   generatedImage.classList.add("hidden");
   generatedImage.removeAttribute("src");
@@ -152,12 +155,14 @@ function onStylePick(event) {
 
   state.style = button.dataset.style;
   state.generated = false;
+  state.lastError = "";
   syncStyleSelection();
   syncUI();
 }
 
 async function generateLookImage() {
   if (!state.garmentFile) {
+    state.lastError = "";
     previewState.textContent = "请先上传";
     previewHeadline.textContent = "先上传上衣图片";
     previewCopy.textContent = "没有主单品，模型无法围绕它生成整套穿搭图。";
@@ -165,6 +170,7 @@ async function generateLookImage() {
   }
 
   lookForm.classList.add("is-loading");
+  state.lastError = "";
   previewState.textContent = "生成中";
   previewHeadline.textContent = "正在调用真实模型生成整套穿搭图";
   previewCopy.textContent = "这一步会把上衣图片和风格要求发送给后端，再由后端请求图像模型。";
@@ -190,21 +196,25 @@ async function generateLookImage() {
 
     const imageSrc = payload.imageDataUrl || payload.imageUrl;
     if (!imageSrc) {
-      throw new Error("模型已经返回成功，但没有拿到图片结果。");
+      throw new Error("模型已经返回成功，但没有拿到图片结果。请点击“重新生成整套穿搭图”再试一次。");
     }
 
     generatedImage.src = imageSrc;
     generatedImage.classList.remove("hidden");
     previewPlaceholder.classList.add("hidden");
     state.generated = true;
+    state.lastError = "";
     previewState.textContent = "已生成";
     previewHeadline.textContent = "模型已经生成整套 look 图";
     previewCopy.textContent = "当前展示的是后端返回的真实图片，不再是前端模拟图。";
     syncUI();
   } catch (error) {
+    state.generated = false;
+    state.lastError = error instanceof Error ? error.message : "请求失败，请稍后重试。";
     previewState.textContent = "生成失败";
     previewHeadline.textContent = "这次没有成功出图";
-    previewCopy.textContent = error instanceof Error ? error.message : "请求失败，请稍后重试。";
+    previewCopy.textContent = state.lastError;
+    syncUI();
   } finally {
     lookForm.classList.remove("is-loading");
   }
@@ -224,6 +234,7 @@ function resetAll() {
   state.style = "quietLuxury";
   state.occasion = "commute";
   state.generated = false;
+  state.lastError = "";
 
   generatedImage.classList.add("hidden");
   generatedImage.removeAttribute("src");
@@ -262,14 +273,22 @@ function syncUI() {
     ? `已经根据上传的上衣、${profile.name} 风格和 ${occasionLabels[state.occasion]} 场景生成整套建议与图片。`
     : "先有完整 look，用户才知道这件上衣最后会被搭成什么样。";
 
+  generateButton.textContent = state.lastError ? "重新生成整套穿搭图" : "生成整套穿搭图";
+
   if (!state.generated) {
-    previewState.textContent = state.garmentFile ? "等待生成" : "等待上传";
-    previewHeadline.textContent = state.garmentFile
-      ? "先上传上衣，再生成完整 look"
-      : "先上传一张上衣图片";
-    previewCopy.textContent = state.garmentFile
-      ? "系统会围绕上传的上衣，按风格自动补出裤子、鞋子、配饰和帽子。"
-      : "图片会发送到后端，再由后端调用真实图像模型。";
+    if (state.lastError) {
+      previewState.textContent = "生成失败";
+      previewHeadline.textContent = "这次没有成功出图";
+      previewCopy.textContent = state.lastError;
+    } else {
+      previewState.textContent = state.garmentFile ? "等待生成" : "等待上传";
+      previewHeadline.textContent = state.garmentFile
+        ? "先上传上衣，再生成完整 look"
+        : "先上传一张上衣图片";
+      previewCopy.textContent = state.garmentFile
+        ? "系统会围绕上传的上衣，按风格自动补出裤子、鞋子、配饰和帽子。"
+        : "图片会发送到后端，再由后端调用真实图像模型。";
+    }
   }
 
   paletteRow.innerHTML = profile.palette.map((item) => `<span>${item}</span>`).join("");
@@ -283,18 +302,18 @@ function toUserError(payload) {
   const message = payload?.error || "图片生成失败。";
 
   if (/No available compatible accounts/i.test(message)) {
-    return "当前图像中转站没有可用账号，页面本身正常，但这一刻无法出图。请稍后重试，或更换可用的图像接口。";
+    return "当前图像中转站没有可用账号，页面本身正常，但这一刻无法出图。请点击“重新生成整套穿搭图”稍后再试，或更换可用的图像接口。";
   }
 
   if (/temporarily unavailable|upstream/i.test(message)) {
-    return "图像服务上游暂时不可用，请稍后再试。";
+    return "图像服务上游暂时不可用。你可以点击“重新生成整套穿搭图”再试一次。";
   }
 
   if (/missing image_api_key/i.test(message)) {
     return "服务端还没有配置图像 API Key，请先在部署平台里补上环境变量。";
   }
 
-  return message;
+  return `${message} 你可以点击“重新生成整套穿搭图”再试一次。`;
 }
 
 function readFileAsDataUrl(file) {
