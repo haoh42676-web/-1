@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: mirror-muse
+    env: node
+    plan: free
+    buildCommand: echo "No build step required"
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: IMAGE_PROVIDER
+        value: openai-compatible-relay
+      - key: IMAGE_BASE_URL
+        value: https://gpt.fengxiaole.top/v1
+      - key: IMAGE_API_MODE
+        value: responses
+      - key: IMAGE_RESPONSE_PATH
+        value: /responses
+      - key: IMAGE_PATH
+        value: /images/edits
+      - key: IMAGE_MODEL
+        value: gpt-5.4
+      - key: IMAGE_EDIT_MODEL
+        value: gpt-image-1
+      - key: IMAGE_OUTPUT_SIZE
+        value: 1024x1536
+      - key: IMAGE_OUTPUT_QUALITY
+        value: high
+      - key: IMAGE_API_KEY
+        sync: false

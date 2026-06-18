@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mirror Muse - AI 整套穿搭生成</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="hero-kicker">Mirror Muse / Full Look Generator</p>
+        <h1>上传一件上衣，生成整套穿搭建议和整图</h1>
+        <p class="hero-text">
+          上传一张上衣图片，选择场景和风格，系统会自动补全裤子、鞋子、配饰和帽子，并尝试生成一张完整的整套穿搭图。
+        </p>
+      </div>
+      <div class="hero-tags">
+        <span>上传上衣</span>
+        <span>选择风格</span>
+        <span>输出整套效果</span>
+      </div>
+    </header>
+
+    <main class="studio">
+      <section class="control-panel">
+        <div class="section-head">
+          <div>
+            <p class="section-label">Input</p>
+            <h2>先确定主单品和风格方向</h2>
+          </div>
+          <p class="section-copy">
+            这一版不做上身试穿，重点是让用户快速拿到完整穿搭方案和整套展示图。
+          </p>
+        </div>
+
+        <form class="control-grid" id="lookForm">
+          <article class="input-card">
+            <div class="card-head">
+              <h3>1. 上传上衣图片</h3>
+              <span id="garmentStatus">未选择</span>
+            </div>
+            <label class="upload-box accent-box">
+              <input id="garmentInput" type="file" accept="image/*">
+              <strong>选择上衣图片</strong>
+              <small>支持商品图、平铺图、纯背景主图</small>
+            </label>
+          </article>
+
+          <article class="input-card">
+            <div class="card-head">
+              <h3>2. 选择穿搭场景</h3>
+              <span>会影响整套建议</span>
+            </div>
+            <label class="field-block">
+              <span>场景</span>
+              <select id="occasionInput">
+                <option value="commute" selected>通勤</option>
+                <option value="casual">日常</option>
+                <option value="date">约会</option>
+                <option value="street">街头</option>
+              </select>
+            </label>
+          </article>
+
+          <article class="input-card input-card-wide">
+            <div class="card-head">
+              <h3>3. 选择风格</h3>
+              <span>系统会按风格补齐整套</span>
+            </div>
+            <div class="style-grid" id="styleGrid">
+              <button class="style-card is-active" type="button" data-style="quietLuxury">
+                <strong>静奢通勤</strong>
+                <span>干净、克制、贵气但不夸张</span>
+              </button>
+              <button class="style-card" type="button" data-style="sweetDate">
+                <strong>甜感约会</strong>
+                <span>柔和、精致、上镜感更强</span>
+              </button>
+              <button class="style-card" type="button" data-style="streetCool">
+                <strong>街头酷感</strong>
+                <span>年轻、有态度、轮廓感明显</span>
+              </button>
+              <button class="style-card" type="button" data-style="cleanMinimal">
+                <strong>极简清冷</strong>
+                <span>利落、冷静、偏高级感</span>
+              </button>
+            </div>
+          </article>
+
+          <article class="input-card">
+            <div class="card-head">
+              <h3>4. 当前选择</h3>
+              <span>消费者视角</span>
+            </div>
+            <div class="selected-style">
+              <strong id="selectedStyleName">静奢通勤</strong>
+              <p id="selectedStyleText">适合想要稳、净、有质感的日常用户。</p>
+            </div>
+          </article>
+
+          <article class="input-card">
+            <div class="card-head">
+              <h3>5. 生成整套图片</h3>
+              <span>输出完整 look 图</span>
+            </div>
+            <div class="action-row">
+              <button class="primary-button" id="generateButton" type="button">生成整套穿搭图</button>
+              <button class="secondary-button" id="resetButton" type="button">重置</button>
+            </div>
+          </article>
+        </form>
+      </section>
+
+      <section class="preview-panel">
+        <div class="section-head">
+          <div>
+            <p class="section-label">Output</p>
+            <h2>AI 整套造型图</h2>
+          </div>
+          <span class="status-pill" id="previewState">等待生成</span>
+        </div>
+
+        <div class="preview-stage">
+          <div class="preview-placeholder" id="previewPlaceholder">
+            <strong>等待生成整套穿搭图</strong>
+            <p>上传上衣并选择风格后，这里会展示模型返回的整套穿搭图。</p>
+          </div>
+          <img id="generatedImage" class="generated-image hidden" alt="AI 生成的整套穿搭图">
+        </div>
+
+        <div class="preview-note">
+          <p class="mini-label">生成说明</p>
+          <strong id="previewHeadline">先上传上衣，再生成完整 look</strong>
+          <p id="previewCopy">系统会围绕上传的上衣，按风格自动补出裤子、鞋子、配饰和帽子。</p>
+        </div>
+      </section>
+    </main>
+
+    <section class="result-panel">
+      <div class="section-head">
+        <div>
+          <p class="section-label">Recommendation</p>
+          <h2>整套穿搭建议拆解</h2>
+        </div>
+        <p class="section-copy" id="resultIntro">先有完整 look，用户才知道这件上衣最后会被搭成什么样。</p>
+      </div>
+
+      <div class="result-grid">
+        <article class="result-card hero-result">
+          <small>整体风格</small>
+          <h3 id="resultVibe">静奢通勤</h3>
+          <p id="resultNarrative">让主单品留在视觉中心，其它单品负责稳住质感和完成度。</p>
+        </article>
+
+        <article class="result-card">
+          <small>裤子</small>
+          <h3 id="resultBottom">高腰烟管裤</h3>
+          <p id="resultBottomText">用利落裤型把整套的线条立起来。</p>
+        </article>
+
+        <article class="result-card">
+          <small>鞋子</small>
+          <h3 id="resultShoes">尖头浅口鞋</h3>
+          <p id="resultShoesText">鞋子决定这套 look 最后是轻松还是精致。</p>
+        </article>
+
+        <article class="result-card">
+          <small>配饰</small>
+          <h3 id="resultAccessory">金属耳饰</h3>
+          <p id="resultAccessoryText">只补最能立住气质的一笔，不要堆满。</p>
+        </article>
+
+        <article class="result-card">
+          <small>帽子</small>
+          <h3 id="resultHat">无帽 / 发箍替代</h3>
+          <p id="resultHatText">这套不一定强行加帽子，按风格决定是否需要头部单品。</p>
+        </article>
+
+        <article class="result-card palette-card">
+          <small>配色方向</small>
+          <div class="palette-row" id="paletteRow">
+            <span>奶油白</span>
+            <span>烟灰</span>
+            <span>深咖</span>
+          </div>
+          <p id="resultPaletteText">配色的任务是把上衣托出来，不是跟它抢戏。</p>
+        </article>
+      </div>
+    </section>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

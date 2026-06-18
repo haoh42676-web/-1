@@ -1,0 +1,15 @@
+{
+  "name": "mirror-muse",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI full-look outfit generator for uploaded tops",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "isomorphic-git": "^1.38.5"
+  }
+}
