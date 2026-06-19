@@ -387,6 +387,9 @@ const state = {
   colorStrategy: "toneOnTone",
   generated: false,
   lastError: "",
+  isAuthorized: false,
+  authChecked: false,
+  pendingGeneration: false,
 };
 
 const garmentInput = document.querySelector("#garmentInput");
@@ -428,6 +431,14 @@ const lookTwoHat = document.querySelector("#lookTwoHat");
 
 const generatedImage = document.querySelector("#generatedImage");
 const previewPlaceholder = document.querySelector("#previewPlaceholder");
+const authModal = document.querySelector("#authModal");
+const authBackdrop = document.querySelector("#authBackdrop");
+const authForm = document.querySelector("#authForm");
+const authCloseButton = document.querySelector("#authCloseButton");
+const authCancelButton = document.querySelector("#authCancelButton");
+const accessCodeInput = document.querySelector("#accessCodeInput");
+const authFeedback = document.querySelector("#authFeedback");
+const authSubmitButton = document.querySelector("#authSubmitButton");
 
 garmentInput.addEventListener("change", (event) => loadGarment(event.target.files?.[0]));
 occasionInput.addEventListener("change", () => updateState("occasion", occasionInput.value));
@@ -436,8 +447,13 @@ colorStrategyInput.addEventListener("change", () => updateState("colorStrategy",
 styleGrid.addEventListener("click", onStylePick);
 generateButton.addEventListener("click", generateLookImage);
 resetButton.addEventListener("click", resetAll);
+authForm.addEventListener("submit", submitAccessCode);
+authBackdrop.addEventListener("click", closeAuthModal);
+authCloseButton.addEventListener("click", closeAuthModal);
+authCancelButton.addEventListener("click", closeAuthModal);
 
 syncUI();
+bootstrapAuthState();
 
 function updateState(key, value) {
   state[key] = value;
@@ -480,6 +496,10 @@ async function generateLookImage() {
     previewState.textContent = "请先上传";
     previewHeadline.textContent = "先上传上衣图片";
     previewCopy.textContent = "没有主单品，系统无法围绕它生成两套穿搭图。";
+    return;
+  }
+
+  if (!(await ensureAuthorized())) {
     return;
   }
 
@@ -555,6 +575,7 @@ function resetAll() {
   state.colorStrategy = "toneOnTone";
   clearGenerationState();
   resetImageStage();
+  state.pendingGeneration = false;
 
   syncStyleSelection();
   syncUI();
@@ -619,6 +640,102 @@ function syncUI() {
   }
 
   paletteRow.innerHTML = profile.palette.map((item) => `<span>${item}</span>`).join("");
+}
+
+async function bootstrapAuthState() {
+  try {
+    const response = await fetch("/api/access/session", {
+      method: "GET",
+      credentials: "same-origin",
+    });
+    const payload = await response.json();
+    state.isAuthorized = Boolean(payload?.authorized);
+    state.authChecked = true;
+  } catch (error) {
+    state.isAuthorized = false;
+    state.authChecked = true;
+  }
+}
+
+async function ensureAuthorized() {
+  if (!state.authChecked) {
+    await bootstrapAuthState();
+  }
+
+  if (state.isAuthorized) {
+    return true;
+  }
+
+  state.pendingGeneration = true;
+  openAuthModal();
+  return false;
+}
+
+function openAuthModal() {
+  authModal.classList.remove("hidden");
+  authModal.setAttribute("aria-hidden", "false");
+  authFeedback.textContent = "输入正确访问码后即可开始生成。";
+  authFeedback.classList.remove("is-error", "is-success");
+  accessCodeInput.value = "";
+  setTimeout(() => accessCodeInput.focus(), 0);
+}
+
+function closeAuthModal() {
+  authModal.classList.add("hidden");
+  authModal.setAttribute("aria-hidden", "true");
+  authSubmitButton.disabled = false;
+  state.pendingGeneration = false;
+}
+
+async function submitAccessCode(event) {
+  event.preventDefault();
+
+  const code = accessCodeInput.value.trim();
+  if (!/^\d{4}$/.test(code)) {
+    authFeedback.textContent = "请输入 4 位数字访问码。";
+    authFeedback.classList.add("is-error");
+    authFeedback.classList.remove("is-success");
+    return;
+  }
+
+  authSubmitButton.disabled = true;
+  authFeedback.textContent = "正在验证访问码...";
+  authFeedback.classList.remove("is-error");
+  authFeedback.classList.remove("is-success");
+
+  try {
+    const response = await fetch("/api/access/verify", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "same-origin",
+      body: JSON.stringify({ code }),
+    });
+
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload?.error || "访问码验证失败。");
+    }
+
+    state.isAuthorized = true;
+    state.authChecked = true;
+    authFeedback.textContent = "访问码验证成功，正在继续生成。";
+    authFeedback.classList.remove("is-error");
+    authFeedback.classList.add("is-success");
+
+    const shouldResume = state.pendingGeneration;
+    closeAuthModal();
+
+    if (shouldResume) {
+      await generateLookImage();
+    }
+  } catch (error) {
+    authSubmitButton.disabled = false;
+    authFeedback.textContent = error instanceof Error ? error.message : "访问码验证失败，请重试。";
+    authFeedback.classList.add("is-error");
+    authFeedback.classList.remove("is-success");
+  }
 }
 
 function fillLookCard(slot, look) {

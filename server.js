@@ -2,10 +2,19 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const { URL } = require("url");
+const crypto = require("crypto");
 
 loadDotEnv(path.join(__dirname, ".env.local"));
 
 const PORT = Number(process.env.PORT || 3000);
+const ACCESS_SESSION_COOKIE = "mirror_muse_session";
+const ACCESS_CODE_PROOF = process.env.ACCESS_CODE_PROOF || "6a2004e012c5c953d4d6fc8c094394fd46b1bc59aec81857e77b4d8cb3d8aea9";
+const ACCESS_CODE_HMAC_SECRET = process.env.ACCESS_CODE_HMAC_SECRET || RELAY_CONFIG_PLACEHOLDER();
+const ACCESS_SESSION_SECRET = process.env.ACCESS_SESSION_SECRET || `${ACCESS_CODE_HMAC_SECRET}:session`;
+const ACCESS_SESSION_TTL_MS = Number(process.env.ACCESS_SESSION_TTL_MS || 12 * 60 * 60 * 1000);
+const ACCESS_MAX_ATTEMPTS = Number(process.env.ACCESS_MAX_ATTEMPTS || 5);
+const ACCESS_BLOCK_WINDOW_MS = Number(process.env.ACCESS_BLOCK_WINDOW_MS || 10 * 60 * 1000);
+const accessAttemptStore = new Map();
 
 const RELAY_CONFIG = {
   apiKey: process.env.IMAGE_API_KEY || process.env.OPENAI_API_KEY || "",
@@ -108,7 +117,25 @@ const COLOR_STRATEGY_GUIDES = {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
+  if (req.method === "POST" && url.pathname === "/api/access/verify") {
+    await handleAccessVerify(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/access/session") {
+    sendJson(res, 200, {
+      authorized: hasValidAccessSession(req),
+    });
+    return;
+  }
+
   if (req.method === "POST" && url.pathname === "/api/generate-look") {
+    if (!hasValidAccessSession(req)) {
+      sendJson(res, 401, {
+        error: "请先输入访问码。",
+      });
+      return;
+    }
     await handleGenerateLook(req, res);
     return;
   }
@@ -181,6 +208,50 @@ async function handleGenerateLook(req, res) {
   } catch (error) {
     sendJson(res, 500, {
       error: error instanceof Error ? error.message : "Unexpected server error.",
+    });
+  }
+}
+
+async function handleAccessVerify(req, res) {
+  const ip = getClientIp(req);
+  const attemptState = getAttemptState(ip);
+
+  if (attemptState.blockedUntil > Date.now()) {
+    sendJson(res, 429, {
+      error: "访问码尝试过多，请稍后再试。",
+    });
+    return;
+  }
+
+  try {
+    const body = await readJsonBody(req);
+    const code = `${body?.code || ""}`.trim();
+
+    if (!/^\d{4}$/.test(code)) {
+      registerFailedAttempt(ip);
+      sendJson(res, 400, {
+        error: "请输入 4 位数字访问码。",
+      });
+      return;
+    }
+
+    if (!isValidAccessCode(code)) {
+      registerFailedAttempt(ip);
+      sendJson(res, 401, {
+        error: "访问码错误。",
+      });
+      return;
+    }
+
+    clearAttempts(ip);
+    setAccessSessionCookie(res);
+    sendJson(res, 200, {
+      ok: true,
+      authorized: true,
+    });
+  } catch (error) {
+    sendJson(res, 500, {
+      error: error instanceof Error ? error.message : "访问码验证失败。",
     });
   }
 }
@@ -646,4 +717,116 @@ function loadDotEnv(filePath) {
       process.env[key] = value;
     }
   });
+}
+
+function RELAY_CONFIG_PLACEHOLDER() {
+  return process.env.IMAGE_API_KEY || process.env.OPENAI_API_KEY || "mirror-muse-fallback-secret";
+}
+
+function isValidAccessCode(code) {
+  const proof = crypto.createHmac("sha256", ACCESS_CODE_HMAC_SECRET).update(`mirror-muse-access:${code}`).digest("hex");
+  const expected = Buffer.from(ACCESS_CODE_PROOF, "hex");
+  const actual = Buffer.from(proof, "hex");
+
+  if (expected.length !== actual.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(expected, actual);
+}
+
+function setAccessSessionCookie(res) {
+  const expiresAt = Date.now() + ACCESS_SESSION_TTL_MS;
+  const payload = `${expiresAt}.${signAccessSession(String(expiresAt))}`;
+  const cookie = [
+    `${ACCESS_SESSION_COOKIE}=${payload}`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Lax",
+    `Max-Age=${Math.floor(ACCESS_SESSION_TTL_MS / 1000)}`,
+  ];
+
+  res.setHeader("Set-Cookie", cookie.join("; "));
+}
+
+function hasValidAccessSession(req) {
+  const cookies = parseCookies(req);
+  const raw = cookies[ACCESS_SESSION_COOKIE];
+  if (!raw) {
+    return false;
+  }
+
+  const [expiresAtRaw, signature] = raw.split(".");
+  const expiresAt = Number(expiresAtRaw);
+  if (!expiresAt || !signature || expiresAt < Date.now()) {
+    return false;
+  }
+
+  const expectedSignature = signAccessSession(expiresAtRaw);
+  const expected = Buffer.from(expectedSignature, "hex");
+  const actual = Buffer.from(signature, "hex");
+  if (expected.length !== actual.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(expected, actual);
+}
+
+function signAccessSession(value) {
+  return crypto.createHmac("sha256", ACCESS_SESSION_SECRET).update(value).digest("hex");
+}
+
+function parseCookies(req) {
+  const raw = req.headers.cookie || "";
+  return raw.split(";").reduce((accumulator, part) => {
+    const [key, ...rest] = part.trim().split("=");
+    if (!key) {
+      return accumulator;
+    }
+    accumulator[key] = rest.join("=");
+    return accumulator;
+  }, {});
+}
+
+function getClientIp(req) {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded) {
+    return forwarded.split(",")[0].trim();
+  }
+  return req.socket.remoteAddress || "unknown";
+}
+
+function getAttemptState(ip) {
+  const current = accessAttemptStore.get(ip);
+  if (!current) {
+    const fresh = {
+      count: 0,
+      firstAt: Date.now(),
+      blockedUntil: 0,
+    };
+    accessAttemptStore.set(ip, fresh);
+    return fresh;
+  }
+
+  if (current.firstAt + ACCESS_BLOCK_WINDOW_MS < Date.now()) {
+    current.count = 0;
+    current.firstAt = Date.now();
+    current.blockedUntil = 0;
+  }
+
+  return current;
+}
+
+function registerFailedAttempt(ip) {
+  const state = getAttemptState(ip);
+  state.count += 1;
+  if (state.count >= ACCESS_MAX_ATTEMPTS) {
+    state.blockedUntil = Date.now() + ACCESS_BLOCK_WINDOW_MS;
+    state.count = 0;
+    state.firstAt = Date.now();
+  }
+}
+
+function clearAttempts(ip) {
+  accessAttemptStore.delete(ip);
 }

@@ -27,3 +27,9 @@ services:
         value: high
       - key: IMAGE_API_KEY
         sync: false
+      - key: ACCESS_CODE_PROOF
+        value: 6a2004e012c5c953d4d6fc8c094394fd46b1bc59aec81857e77b4d8cb3d8aea9
+      - key: ACCESS_CODE_HMAC_SECRET
+        sync: false
+      - key: ACCESS_SESSION_SECRET
+        sync: false
