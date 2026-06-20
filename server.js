@@ -8,6 +8,7 @@ loadDotEnv(path.join(__dirname, ".env.local"));
 
 const PORT = Number(process.env.PORT || 3000);
 const ACCESS_SESSION_COOKIE = "mirror_muse_session";
+const APP_ASSET_ORIGIN = "https://appassets.androidplatform.net";
 const ACCESS_CODE_PROOF = process.env.ACCESS_CODE_PROOF || "6a2004e012c5c953d4d6fc8c094394fd46b1bc59aec81857e77b4d8cb3d8aea9";
 const ACCESS_CODE_HMAC_SECRET = process.env.ACCESS_CODE_HMAC_SECRET || RELAY_CONFIG_PLACEHOLDER();
 const ACCESS_SESSION_SECRET = process.env.ACCESS_SESSION_SECRET || `${ACCESS_CODE_HMAC_SECRET}:session`;
@@ -35,6 +36,7 @@ const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  ".apk": "application/vnd.android.package-archive",
   ".png": "image/png",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
@@ -116,6 +118,15 @@ const COLOR_STRATEGY_GUIDES = {
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
+
+  if (url.pathname.startsWith("/api/")) {
+    applyApiCorsHeaders(req, res);
+    if (req.method === "OPTIONS") {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+  }
 
   if (req.method === "POST" && url.pathname === "/api/access/verify") {
     await handleAccessVerify(req, res);
@@ -244,7 +255,7 @@ async function handleAccessVerify(req, res) {
     }
 
     clearAttempts(ip);
-    setAccessSessionCookie(res);
+    setAccessSessionCookie(req, res);
     sendJson(res, 200, {
       ok: true,
       authorized: true,
@@ -292,10 +303,18 @@ async function callRelayImageGeneration({ prompt, imageBytes, mimeType, garmentD
   }
 
   if (RELAY_CONFIG.apiMode === "responses") {
-    return callResponsesImageGeneration({
-      prompt,
-      garmentDataUrl,
-    });
+    try {
+      const responsesResult = await callResponsesImageGeneration({
+        prompt,
+        garmentDataUrl,
+      });
+
+      if (responsesResult.ok) {
+        return responsesResult;
+      }
+    } catch (error) {
+      // Fall through to image-specific endpoints when the relay's responses API is unstable.
+    }
   }
 
   const attempts = [
@@ -612,6 +631,9 @@ function serveStatic(requestPath, res) {
   if (safePath === "/mobile") {
     safePath = "/mobile/index.html";
   }
+  if (safePath === "/apk") {
+    safePath = "/apk-download.html";
+  }
   const filePath = path.join(PUBLIC_DIR, path.normalize(safePath));
 
   if (!filePath.startsWith(PUBLIC_DIR)) {
@@ -626,10 +648,16 @@ function serveStatic(requestPath, res) {
     }
 
     const ext = path.extname(filePath).toLowerCase();
-    res.writeHead(200, {
+    const headers = {
       "Content-Type": MIME_TYPES[ext] || "application/octet-stream",
       "Cache-Control": "no-cache",
-    });
+    };
+
+    if (ext === ".apk") {
+      headers["Content-Disposition"] = `attachment; filename="${path.basename(filePath)}"`;
+    }
+
+    res.writeHead(200, headers);
     res.end(buffer);
   });
 }
@@ -738,16 +766,21 @@ function isValidAccessCode(code) {
   return crypto.timingSafeEqual(expected, actual);
 }
 
-function setAccessSessionCookie(res) {
+function setAccessSessionCookie(req, res) {
   const expiresAt = Date.now() + ACCESS_SESSION_TTL_MS;
   const payload = `${expiresAt}.${signAccessSession(String(expiresAt))}`;
+  const isCrossOriginAppRequest = req.headers.origin === APP_ASSET_ORIGIN;
   const cookie = [
     `${ACCESS_SESSION_COOKIE}=${payload}`,
     "Path=/",
     "HttpOnly",
-    "SameSite=Lax",
+    isCrossOriginAppRequest ? "SameSite=None" : "SameSite=Lax",
     `Max-Age=${Math.floor(ACCESS_SESSION_TTL_MS / 1000)}`,
   ];
+
+  if (isCrossOriginAppRequest) {
+    cookie.push("Secure");
+  }
 
   res.setHeader("Set-Cookie", cookie.join("; "));
 }
@@ -797,6 +830,19 @@ function getClientIp(req) {
     return forwarded.split(",")[0].trim();
   }
   return req.socket.remoteAddress || "unknown";
+}
+
+function applyApiCorsHeaders(req, res) {
+  const origin = req.headers.origin || "";
+  if (origin !== APP_ASSET_ORIGIN) {
+    return;
+  }
+
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Vary", "Origin");
 }
 
 function getAttemptState(ip) {

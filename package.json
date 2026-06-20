@@ -10,6 +10,7 @@
     "node": ">=20"
   },
   "dependencies": {
-    "isomorphic-git": "^1.38.5"
+    "isomorphic-git": "^1.38.5",
+    "playwright-core": "^1.61.0"
   }
 }

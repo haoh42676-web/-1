@@ -108,6 +108,33 @@ body {
   background: rgba(255, 255, 255, 0.8);
 }
 
+.hero-download {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.hero-download-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(14, 109, 102, 0.16);
+  background: linear-gradient(135deg, rgba(14, 109, 102, 0.12), rgba(255, 255, 255, 0.94));
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.hero-download-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px rgba(14, 109, 102, 0.12);
+  border-color: rgba(14, 109, 102, 0.28);
+}
+
 .studio {
   display: grid;
   grid-template-columns: 1.02fr 0.98fr;
@@ -513,6 +540,10 @@ select:focus,
     justify-content: flex-start;
   }
 
+  .hero-download {
+    justify-content: flex-start;
+  }
+
   .hero-result {
     grid-column: span 1;
   }
@@ -539,6 +570,10 @@ select:focus,
   .hero h1 {
     max-width: none;
     font-size: clamp(2rem, 8vw, 3.2rem);
+  }
+
+  .hero-download-button {
+    width: 100%;
   }
 
   .control-grid,

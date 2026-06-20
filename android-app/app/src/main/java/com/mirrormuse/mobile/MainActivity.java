@@ -19,10 +19,12 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.webkit.WebViewAssetLoader;
 
 public class MainActivity extends AppCompatActivity {
     private WebView webView;
     private ValueCallback<Uri[]> filePathCallback;
+    private WebViewAssetLoader assetLoader;
 
     private final ActivityResultLauncher<Intent> filePickerLauncher =
         registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
@@ -66,6 +68,10 @@ public class MainActivity extends AppCompatActivity {
         settings.setDisplayZoomControls(false);
         settings.setUserAgentString(settings.getUserAgentString() + " MirrorMuseMobileApp/1.0");
 
+        assetLoader = new WebViewAssetLoader.Builder()
+            .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
+            .build();
+
         webView.setWebViewClient(new MirrorMuseWebViewClient());
         webView.setWebChromeClient(new MirrorMuseChromeClient());
 
@@ -103,10 +109,18 @@ public class MainActivity extends AppCompatActivity {
 
     private static boolean isAppHost(Uri uri) {
         String host = uri.getHost();
-        return host != null && host.contains("mirror-muse.onrender.com");
+        return host != null && (
+            host.contains("mirror-muse.onrender.com") ||
+            host.contains("appassets.androidplatform.net")
+        );
     }
 
     private class MirrorMuseWebViewClient extends WebViewClient {
+        @Override
+        public android.webkit.WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+            return assetLoader.shouldInterceptRequest(request.getUrl());
+        }
+
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
             Uri uri = request.getUrl();

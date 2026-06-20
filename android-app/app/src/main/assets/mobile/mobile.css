@@ -90,26 +90,6 @@ body {
   letter-spacing: -0.04em;
 }
 
-.hero-download-row {
-  margin-top: 16px;
-}
-
-.hero-download-button {
-  display: inline-flex;
-  width: 100%;
-  min-height: 52px;
-  align-items: center;
-  justify-content: center;
-  padding: 0 18px;
-  border-radius: 18px;
-  border: 1px solid rgba(14, 118, 110, 0.18);
-  background: linear-gradient(135deg, rgba(14, 118, 110, 0.12), rgba(255, 255, 255, 0.94));
-  color: var(--accent);
-  text-decoration: none;
-  font-weight: 700;
-  box-shadow: 0 12px 28px rgba(14, 118, 110, 0.08);
-}
-
 .hero-copy,
 .helper-copy,
 .garment-placeholder p,
