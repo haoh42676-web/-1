@@ -202,36 +202,6 @@
       </section>
     </main>
 
-    <div class="auth-modal hidden" id="authModal" aria-hidden="true">
-      <div class="auth-backdrop" id="authBackdrop"></div>
-      <section class="auth-card" role="dialog" aria-modal="true" aria-labelledby="authTitle">
-        <button class="auth-close" id="authCloseButton" type="button" aria-label="关闭">×</button>
-        <p class="section-label">Access</p>
-        <h2 id="authTitle">输入 4 位访问码</h2>
-        <p class="auth-copy">首次生成图片前需要验证访问码。验证成功后，本设备在一段时间内无需重复输入。</p>
-        <form id="authForm" class="auth-form">
-          <label class="field-block">
-            <span>访问码</span>
-            <input
-              id="accessCodeInput"
-              class="auth-input"
-              type="password"
-              inputmode="numeric"
-              maxlength="4"
-              minlength="4"
-              placeholder="请输入 4 位数字"
-              autocomplete="one-time-code"
-            >
-          </label>
-          <p class="auth-feedback" id="authFeedback">输入正确访问码后即可开始生成。</p>
-          <div class="auth-actions">
-            <button class="primary-button" id="authSubmitButton" type="submit">验证并继续</button>
-            <button class="secondary-button" id="authCancelButton" type="button">取消</button>
-          </div>
-        </form>
-      </section>
-    </div>
-
     <section class="result-panel">
       <div class="section-head">
         <div>

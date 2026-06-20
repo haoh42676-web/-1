@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#d86b3e">
   <meta
     name="description"
-    content="上传一件上衣，选择穿搭风格、场景、模式和配色方向，生成两套完整穿搭建议与 AI 图片。"
+    content="上传一件上衣，选择场景、风格、模式和配色方向，登录后生成两套完整穿搭建议与 AI 图片。"
   >
   <link rel="stylesheet" href="/mobile/mobile.css">
 </head>
@@ -20,8 +20,8 @@
       </div>
       <h1>上传一件上衣，生成两套完整造型</h1>
       <p class="hero-copy">
-        这是单独给手机 App 使用的移动版界面。系统会围绕同一件上衣，为你设计
-        Look A 和 Look B 两套完整穿搭，包括裤子、鞋子、配饰和帽子建议，并生成一张成图。
+        这是给手机端使用的移动版界面。系统会围绕同一件上衣，为你设计 Look A 和 Look B 两套完整穿搭，
+        包括裤子、鞋子、帽子与配饰建议，并生成一张整合效果图。
       </p>
       <div class="hero-download-row">
         <a class="hero-download-button" href="/apk">下载安卓 APK</a>
@@ -42,7 +42,7 @@
           <img id="garmentThumb" class="garment-thumb hidden" alt="已上传上衣预览">
           <div class="garment-placeholder" id="garmentPlaceholder">
             <strong>准备你的上衣主图</strong>
-            <p>支持白底图、平铺图、商品图和干净背景的实拍图。</p>
+            <p>支持白底图、平铺图、商品图和背景干净的实拍图。</p>
           </div>
         </div>
 
@@ -68,7 +68,7 @@
               <option value="date">约会出片</option>
               <option value="street">街头造型</option>
               <option value="travel">旅行轻便</option>
-              <option value="party">聚会晚间</option>
+              <option value="party">聚会夜晚</option>
               <option value="campus">校园休闲</option>
             </select>
           </label>
@@ -87,7 +87,7 @@
                 <option value="comfort">更轻松好穿</option>
                 <option value="statement">更有造型感</option>
                 <option value="luxury">更精致贵气</option>
-                <option value="youthful">更年轻活力</option>
+                <option value="youthful">更年轻有活力</option>
               </select>
             </label>
           </div>
@@ -103,7 +103,7 @@
                 <option value="softLuxury">低饱和高级感</option>
                 <option value="seasonal">季节氛围配色</option>
                 <option value="cleanNeutrals">干净中性色</option>
-                <option value="accentPop">一点亮色点题</option>
+                <option value="accentPop">一点亮色点缀</option>
               </select>
             </label>
           </div>
@@ -144,7 +144,7 @@
             </button>
             <button class="style-card" type="button" data-style="retroAcademy">
               <strong>复古学院</strong>
-              <span>清爽、文艺、带点复古气质</span>
+              <span>清爽、文艺、带一点复古气质</span>
             </button>
             <button class="style-card" type="button" data-style="resortChic">
               <strong>度假轻奢</strong>
@@ -205,7 +205,7 @@
             <span id="lookOneBottom">裤子：高腰烟管裤</span>
             <span id="lookOneShoes">鞋子：尖头浅口鞋</span>
             <span id="lookOneAccessory">配饰：金属耳饰</span>
-            <span id="lookOneHat">帽子：无帽 / 发夹替代</span>
+            <span id="lookOneHat">帽子：无帽 / 发型替代</span>
           </div>
         </article>
 
@@ -216,7 +216,7 @@
           <div class="look-meta">
             <span id="lookTwoBottom">裤子：垂感直筒裤</span>
             <span id="lookTwoShoes">鞋子：皮面乐福鞋</span>
-            <span id="lookTwoAccessory">配饰：结构托特包</span>
+            <span id="lookTwoAccessory">配饰：结构感托特包</span>
             <span id="lookTwoHat">帽子：小檐礼帽</span>
           </div>
         </article>
@@ -241,43 +241,13 @@
 
     <div class="action-dock">
       <div class="action-copy">
-        <strong>准备生成双套造型</strong>
-        <span>先验证访问码，再调用 AI 生图</span>
+        <strong>登录后即可生成双套搭配</strong>
+        <span>支持批量上传衣橱图片，并可只用你已有单品来搭配</span>
       </div>
       <div class="action-buttons">
         <button class="secondary-button" id="resetButton" type="button">重置</button>
         <button class="primary-button" id="generateButton" type="button">生成双套穿搭图</button>
       </div>
-    </div>
-
-    <div class="auth-modal hidden" id="authModal" aria-hidden="true">
-      <div class="auth-backdrop" id="authBackdrop"></div>
-      <section class="auth-card" role="dialog" aria-modal="true" aria-labelledby="authTitle">
-        <button class="auth-close" id="authCloseButton" type="button" aria-label="关闭">×</button>
-        <p class="section-label">Access</p>
-        <h2 id="authTitle">输入 4 位访问码</h2>
-        <p class="auth-copy">首次生成图片前需要验证访问码。验证成功后，本设备在一段时间内无需重复输入。</p>
-        <form id="authForm" class="auth-form">
-          <label class="field-block">
-            <span>访问码</span>
-            <input
-              id="accessCodeInput"
-              class="auth-input"
-              type="password"
-              inputmode="numeric"
-              maxlength="4"
-              minlength="4"
-              placeholder="请输入 4 位数字"
-              autocomplete="one-time-code"
-            >
-          </label>
-          <p class="auth-feedback" id="authFeedback">输入正确访问码后即可开始生成。</p>
-          <div class="auth-actions">
-            <button class="primary-button" id="authSubmitButton" type="submit">验证并继续</button>
-            <button class="secondary-button" id="authCancelButton" type="button">取消</button>
-          </div>
-        </form>
-      </section>
     </div>
   </div>
 
