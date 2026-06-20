@@ -7,15 +7,18 @@ const crypto = require("crypto");
 loadDotEnv(path.join(__dirname, ".env.local"));
 
 const PORT = Number(process.env.PORT || 3000);
-const ACCESS_SESSION_COOKIE = "mirror_muse_session";
+const PUBLIC_DIR = __dirname;
 const APP_ASSET_ORIGIN = "https://appassets.androidplatform.net";
-const ACCESS_CODE_PROOF = process.env.ACCESS_CODE_PROOF || "6a2004e012c5c953d4d6fc8c094394fd46b1bc59aec81857e77b4d8cb3d8aea9";
-const ACCESS_CODE_HMAC_SECRET = process.env.ACCESS_CODE_HMAC_SECRET || RELAY_CONFIG_PLACEHOLDER();
+const ACCESS_SESSION_COOKIE = "mirror_muse_session";
+const AUTH_SESSION_COOKIE = "mirror_muse_auth";
+const ACCESS_CODE_PROOF = process.env.ACCESS_CODE_PROOF || "c552c2fa328c4204faf0f2efdaa0e2dc1e56d6e4232aa5f178f0a2fb567b30a1";
+const ACCESS_CODE_HMAC_SECRET = process.env.ACCESS_CODE_HMAC_SECRET || relaySecret();
 const ACCESS_SESSION_SECRET = process.env.ACCESS_SESSION_SECRET || `${ACCESS_CODE_HMAC_SECRET}:session`;
+const AUTH_SESSION_SECRET = process.env.AUTH_SESSION_SECRET || `${relaySecret()}:auth`;
 const ACCESS_SESSION_TTL_MS = Number(process.env.ACCESS_SESSION_TTL_MS || 12 * 60 * 60 * 1000);
+const AUTH_SESSION_TTL_MS = Number(process.env.AUTH_SESSION_TTL_MS || 12 * 60 * 60 * 1000);
 const ACCESS_MAX_ATTEMPTS = Number(process.env.ACCESS_MAX_ATTEMPTS || 5);
 const ACCESS_BLOCK_WINDOW_MS = Number(process.env.ACCESS_BLOCK_WINDOW_MS || 10 * 60 * 1000);
-const accessAttemptStore = new Map();
 
 const RELAY_CONFIG = {
   apiKey: process.env.IMAGE_API_KEY || process.env.OPENAI_API_KEY || "",
@@ -29,8 +32,6 @@ const RELAY_CONFIG = {
   outputQuality: process.env.IMAGE_OUTPUT_QUALITY || "high",
 };
 
-const PUBLIC_DIR = __dirname;
-
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -43,6 +44,17 @@ const MIME_TYPES = {
   ".webp": "image/webp",
   ".svg": "image/svg+xml",
 };
+
+const FIXED_USERS = Object.freeze({
+  test1: { passwordHash: hashFixedPassword("test1", "123456") },
+  test2: { passwordHash: hashFixedPassword("test2", "123456") },
+  test3: { passwordHash: hashFixedPassword("test3", "123456") },
+  test4: { passwordHash: hashFixedPassword("test4", "123456") },
+  test5: { passwordHash: hashFixedPassword("test5", "123456") },
+});
+
+const WARDROBE_CATEGORIES = ["tops", "bottoms", "shoes", "hats", "accessories"];
+const WARDROBE_REFERENCE_IMAGE_LIMIT = Number(process.env.WARDROBE_REFERENCE_IMAGE_LIMIT || 12);
 
 const STYLE_GUIDES = {
   quietLuxury: {
@@ -116,6 +128,8 @@ const COLOR_STRATEGY_GUIDES = {
   accentPop: "Use mostly calm tones with one controlled accent color to create a memorable focal point.",
 };
 
+const accessAttemptStore = new Map();
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
@@ -126,6 +140,25 @@ const server = http.createServer(async (req, res) => {
       res.end();
       return;
     }
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/login") {
+    await handleLogin(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/logout") {
+    handleLogout(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/auth/session") {
+    const authSession = getAuthSession(req);
+    sendJson(res, 200, {
+      authenticated: Boolean(authSession),
+      username: authSession?.username || null,
+    });
+    return;
   }
 
   if (req.method === "POST" && url.pathname === "/api/access/verify") {
@@ -141,13 +174,15 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "POST" && url.pathname === "/api/generate-look") {
-    if (!hasValidAccessSession(req)) {
+    const authSession = getAuthSession(req);
+    if (!authSession) {
       sendJson(res, 401, {
-        error: "请先输入访问码。",
+        error: "Please log in before generating outfit images.",
       });
       return;
     }
-    await handleGenerateLook(req, res);
+
+    await handleGenerateLook(req, res, authSession);
     return;
   }
 
@@ -160,6 +195,7 @@ const server = http.createServer(async (req, res) => {
       baseUrl: RELAY_CONFIG.baseUrl,
       apiMode: RELAY_CONFIG.apiMode,
       imageEditModel: RELAY_CONFIG.imageEditModel,
+      fixedUsers: Object.keys(FIXED_USERS),
     });
     return;
   }
@@ -174,7 +210,104 @@ server.listen(PORT, () => {
   }
 });
 
-async function handleGenerateLook(req, res) {
+async function handleLogin(req, res) {
+  try {
+    const body = await readJsonBody(req);
+    const username = `${body?.username || ""}`.trim();
+    const password = `${body?.password || ""}`;
+    const user = FIXED_USERS[username];
+
+    if (!user) {
+      sendJson(res, 401, {
+        error: "Invalid username or password.",
+      });
+      return;
+    }
+
+    const actual = Buffer.from(user.passwordHash, "hex");
+    const expected = Buffer.from(hashFixedPassword(username, password), "hex");
+    if (actual.length !== expected.length || !crypto.timingSafeEqual(actual, expected)) {
+      sendJson(res, 401, {
+        error: "Invalid username or password.",
+      });
+      return;
+    }
+
+    setAuthSessionCookie(req, res, username);
+    sendJson(res, 200, {
+      ok: true,
+      authenticated: true,
+      username,
+    });
+  } catch (error) {
+    sendJson(res, 500, {
+      error: error instanceof Error ? error.message : "Login failed.",
+    });
+  }
+}
+
+function handleLogout(req, res) {
+  clearCookie(res, AUTH_SESSION_COOKIE, req.headers.origin === APP_ASSET_ORIGIN);
+  clearCookie(res, ACCESS_SESSION_COOKIE, req.headers.origin === APP_ASSET_ORIGIN);
+  sendJson(res, 200, {
+    ok: true,
+    authenticated: false,
+  });
+}
+
+async function handleAccessVerify(req, res) {
+  const authSession = getAuthSession(req);
+  if (!authSession) {
+    sendJson(res, 401, {
+      error: "Please log in before verifying the access code.",
+    });
+    return;
+  }
+
+  const ip = `${getClientIp(req)}:${authSession.username}`;
+  const attemptState = getAttemptState(ip);
+
+  if (attemptState.blockedUntil > Date.now()) {
+    sendJson(res, 429, {
+      error: "Too many failed access code attempts. Please try again later.",
+    });
+    return;
+  }
+
+  try {
+    const body = await readJsonBody(req);
+    const code = `${body?.code || ""}`.trim();
+
+    if (!/^\d{4}$/.test(code)) {
+      registerFailedAttempt(ip);
+      sendJson(res, 400, {
+        error: "Please enter a valid 4-digit access code.",
+      });
+      return;
+    }
+
+    if (!isValidAccessCode(code)) {
+      registerFailedAttempt(ip);
+      sendJson(res, 401, {
+        error: "Access code is incorrect.",
+      });
+      return;
+    }
+
+    clearAttempts(ip);
+    setAccessSessionCookie(req, res);
+    sendJson(res, 200, {
+      ok: true,
+      authorized: true,
+    });
+  } catch (error) {
+    sendJson(res, 500, {
+      error: error instanceof Error ? error.message : "Access code verification failed.",
+    });
+  }
+}
+
+async function handleGenerateLook(req, res, authSession) {
   try {
     const body = await readJsonBody(req);
     const garmentDataUrl = body?.garmentDataUrl || "";
@@ -182,6 +315,10 @@ async function handleGenerateLook(req, res) {
     const occasion = body?.occasion || "commute";
     const mode = body?.mode || "balanced";
     const colorStrategy = body?.colorStrategy || "toneOnTone";
+    const wardrobeOnly = Boolean(body?.wardrobeOnly);
+    const wardrobe = normalizeWardrobe(body?.wardrobe);
+    const wardrobeReferenceImages = collectWardrobeReferenceImages(wardrobe);
+
     const mimeType = getMimeTypeFromDataUrl(garmentDataUrl);
     const imageBytes = dataUrlToBuffer(garmentDataUrl);
 
@@ -192,12 +329,29 @@ async function handleGenerateLook(req, res) {
       return;
     }
 
-    const prompt = buildPrompt(style, occasion, mode, colorStrategy);
+    if (wardrobeOnly && wardrobeIsEmpty(wardrobe)) {
+      sendJson(res, 400, {
+        error: "Wardrobe-only mode needs at least one wardrobe item uploaded first.",
+      });
+      return;
+    }
+
+    const prompt = buildPrompt({
+      styleKey: style,
+      occasionKey: occasion,
+      modeKey: mode,
+      colorStrategyKey: colorStrategy,
+      wardrobeOnly,
+      wardrobe,
+      username: authSession.username,
+    });
+
     const generationResult = await callRelayImageGeneration({
       prompt,
       imageBytes,
       mimeType: mimeType || "image/png",
       garmentDataUrl,
+      wardrobeReferenceImages,
     });
 
     if (!generationResult.ok) {
@@ -215,6 +369,8 @@ async function handleGenerateLook(req, res) {
       provider: "relay",
       providerLabel: "ChatGPT relay image",
       apiMode: generationResult.mode || null,
+      wardrobeOnly,
+      wardrobeSummary: summarizeWardrobe(wardrobe),
     });
   } catch (error) {
     sendJson(res, 500, {
@@ -223,58 +379,17 @@ async function handleGenerateLook(req, res) {
   }
 }
 
-async function handleAccessVerify(req, res) {
-  const ip = getClientIp(req);
-  const attemptState = getAttemptState(ip);
-
-  if (attemptState.blockedUntil > Date.now()) {
-    sendJson(res, 429, {
-      error: "访问码尝试过多，请稍后再试。",
-    });
-    return;
-  }
-
-  try {
-    const body = await readJsonBody(req);
-    const code = `${body?.code || ""}`.trim();
-
-    if (!/^\d{4}$/.test(code)) {
-      registerFailedAttempt(ip);
-      sendJson(res, 400, {
-        error: "请输入 4 位数字访问码。",
-      });
-      return;
-    }
-
-    if (!isValidAccessCode(code)) {
-      registerFailedAttempt(ip);
-      sendJson(res, 401, {
-        error: "访问码错误。",
-      });
-      return;
-    }
-
-    clearAttempts(ip);
-    setAccessSessionCookie(req, res);
-    sendJson(res, 200, {
-      ok: true,
-      authorized: true,
-    });
-  } catch (error) {
-    sendJson(res, 500, {
-      error: error instanceof Error ? error.message : "访问码验证失败。",
-    });
-  }
-}
-
-function buildPrompt(styleKey, occasionKey, modeKey, colorStrategyKey) {
+function buildPrompt({ styleKey, occasionKey, modeKey, colorStrategyKey, wardrobeOnly, wardrobe, username }) {
   const style = STYLE_GUIDES[styleKey] || STYLE_GUIDES.quietLuxury;
   const occasion = OCCASION_GUIDES[occasionKey] || OCCASION_GUIDES.commute;
   const mode = MODE_GUIDES[modeKey] || MODE_GUIDES.balanced;
   const colorStrategy = COLOR_STRATEGY_GUIDES[colorStrategyKey] || COLOR_STRATEGY_GUIDES.toneOnTone;
+  const wardrobeBlock = wardrobeOnly
+    ? buildWardrobePromptBlock(wardrobe)
+    : "You may recommend ideal complementary pieces beyond the user's own wardrobe when needed.";
 
   return [
-    "Create one premium fashion concept board centered on the uploaded top garment.",
+    `Create one premium fashion concept board for user ${username} centered on the uploaded top garment.`,
     "Preserve the uploaded top's color, print, texture, and silhouette as faithfully as possible.",
     "Generate one polished comparison board that clearly presents two complete outfit solutions: Look A and Look B.",
     "Both looks must use the same uploaded top as the hero item.",
@@ -285,6 +400,7 @@ function buildPrompt(styleKey, occasionKey, modeKey, colorStrategyKey) {
     `Outfit guidance: ${style.outfit}. Occasion: ${occasion}.`,
     `Mode guidance: ${mode}.`,
     `Color strategy: ${colorStrategy}.`,
+    wardrobeBlock,
     "Show both looks fully and clearly in the same image, separated enough to compare at a glance.",
     "Do not place the outfit on a real person.",
     "Use an editorial flatlay, hanger composition, invisible mannequin, or polished fashion board presentation.",
@@ -293,7 +409,82 @@ function buildPrompt(styleKey, occasionKey, modeKey, colorStrategyKey) {
   ].join(" ");
 }
 
-async function callRelayImageGeneration({ prompt, imageBytes, mimeType, garmentDataUrl }) {
+function buildWardrobePromptBlock(wardrobe) {
+  const categoryLabels = {
+    tops: "tops",
+    bottoms: "bottoms",
+    shoes: "shoes",
+    hats: "hats",
+    accessories: "accessories",
+  };
+
+  const parts = WARDROBE_CATEGORIES.map((category) => {
+    const items = wardrobe[category] || [];
+    if (!items.length) {
+      return `${categoryLabels[category]}: none uploaded`;
+    }
+
+    const itemList = items
+      .map((item, index) => `${index + 1}. ${item.name}${item.notes ? ` (${item.notes})` : ""}`)
+      .join("; ");
+    return `${categoryLabels[category]}: ${itemList}`;
+  });
+
+  return [
+    "Use only pieces from the user's own uploaded wardrobe when building complementary items.",
+    "Do not invent missing wardrobe pieces and do not substitute outside products.",
+    ...parts,
+  ].join(" ");
+}
+
+function normalizeWardrobe(rawWardrobe) {
+  const normalized = {};
+  for (const category of WARDROBE_CATEGORIES) {
+    const rawItems = Array.isArray(rawWardrobe?.[category]) ? rawWardrobe[category] : [];
+    normalized[category] = rawItems
+      .map((item) => ({
+        name: `${item?.name || ""}`.trim().slice(0, 120),
+        notes: `${item?.notes || ""}`.trim().slice(0, 160),
+        imageDataUrl: `${item?.imageDataUrl || ""}`.trim(),
+      }))
+      .filter((item) => item.name);
+  }
+  return normalized;
+}
+
+function collectWardrobeReferenceImages(wardrobe) {
+  const collected = [];
+  for (const category of WARDROBE_CATEGORIES) {
+    for (const item of wardrobe[category] || []) {
+      if (!item.imageDataUrl || !getMimeTypeFromDataUrl(item.imageDataUrl)) {
+        continue;
+      }
+
+      collected.push({
+        category,
+        name: item.name,
+        imageDataUrl: item.imageDataUrl,
+      });
+
+      if (collected.length >= WARDROBE_REFERENCE_IMAGE_LIMIT) {
+        return collected;
+      }
+    }
+  }
+  return collected;
+}
+
+function wardrobeIsEmpty(wardrobe) {
+  return WARDROBE_CATEGORIES.every((category) => !wardrobe[category]?.length);
+}
+
+function summarizeWardrobe(wardrobe) {
+  return Object.fromEntries(
+    WARDROBE_CATEGORIES.map((category) => [category, wardrobe[category]?.length || 0]),
+  );
+}
+
+async function callRelayImageGeneration({ prompt, imageBytes, mimeType, garmentDataUrl, wardrobeReferenceImages }) {
   if (!RELAY_CONFIG.apiKey) {
     return {
       ok: false,
@@ -307,13 +498,14 @@ async function callRelayImageGeneration({ prompt, imageBytes, mimeType, garmentD
       const responsesResult = await callResponsesImageGeneration({
         prompt,
         garmentDataUrl,
+        wardrobeReferenceImages,
       });
 
       if (responsesResult.ok) {
         return responsesResult;
       }
-    } catch (error) {
-      // Fall through to image-specific endpoints when the relay's responses API is unstable.
+    } catch (_error) {
+      // Fall through to image endpoints.
     }
   }
 
@@ -323,7 +515,6 @@ async function callRelayImageGeneration({ prompt, imageBytes, mimeType, garmentD
   ];
 
   let lastFailure = null;
-
   for (const attempt of attempts) {
     try {
       const result = attempt.mode === "edit"
@@ -335,7 +526,6 @@ async function callRelayImageGeneration({ prompt, imageBytes, mimeType, garmentD
       }
 
       lastFailure = { ...result, mode: attempt.mode };
-
       if (!shouldFallbackToGeneration(result)) {
         return { ...result, mode: attempt.mode };
       }
@@ -345,7 +535,6 @@ async function callRelayImageGeneration({ prompt, imageBytes, mimeType, garmentD
         status: 500,
         error: error instanceof Error ? error.message : "Unknown request error.",
         details: { mode: attempt.mode },
-        mode: attempt.mode,
       };
     }
   }
@@ -427,8 +616,15 @@ async function callImageGenerationEndpoint({ prompt, pathOverride }) {
   });
 }
 
-async function callResponsesImageGeneration({ prompt, garmentDataUrl }) {
+async function callResponsesImageGeneration({ prompt, garmentDataUrl, wardrobeReferenceImages = [] }) {
   const targetPath = RELAY_CONFIG.responsePath || "/responses";
+  const imageContent = [
+    { type: "input_image", image_url: garmentDataUrl },
+    ...wardrobeReferenceImages.map((item) => ({
+      type: "input_image",
+      image_url: item.imageDataUrl,
+    })),
+  ];
   const attempts = [
     {
       mode: "responses-tool-configured",
@@ -439,7 +635,7 @@ async function callResponsesImageGeneration({ prompt, garmentDataUrl }) {
             role: "user",
             content: [
               { type: "input_text", text: prompt },
-              { type: "input_image", image_url: garmentDataUrl },
+              ...imageContent,
             ],
           },
         ],
@@ -461,7 +657,7 @@ async function callResponsesImageGeneration({ prompt, garmentDataUrl }) {
             role: "user",
             content: [
               { type: "input_text", text: prompt },
-              { type: "input_image", image_url: garmentDataUrl },
+              ...imageContent,
             ],
           },
         ],
@@ -471,7 +667,6 @@ async function callResponsesImageGeneration({ prompt, garmentDataUrl }) {
   ];
 
   let lastFailure = null;
-
   for (const attempt of attempts) {
     const result = await callRelayEndpoint({
       path: targetPath,
@@ -483,10 +678,7 @@ async function callResponsesImageGeneration({ prompt, garmentDataUrl }) {
     });
 
     if (!result.ok) {
-      lastFailure = {
-        ...result,
-        mode: attempt.mode,
-      };
+      lastFailure = { ...result, mode: attempt.mode };
       continue;
     }
 
@@ -586,7 +778,6 @@ function findResponsesImageCall(payload) {
       }
     }
   }
-
   return null;
 }
 
@@ -594,7 +785,6 @@ function normalizeImageResult(result) {
   if (typeof result === "string") {
     return result;
   }
-
   if (Array.isArray(result)) {
     const first = result.find((item) => typeof item === "string" || item?.image_base64);
     if (typeof first === "string") {
@@ -604,26 +794,10 @@ function normalizeImageResult(result) {
       return first.image_base64;
     }
   }
-
   if (result?.image_base64) {
     return result.image_base64;
   }
-
   return null;
-}
-
-function tryParseJson(text) {
-  if (!text) {
-    return {};
-  }
-
-  try {
-    return JSON.parse(text);
-  } catch (error) {
-    return {
-      raw: text,
-    };
-  }
 }
 
 function serveStatic(requestPath, res) {
@@ -634,8 +808,8 @@ function serveStatic(requestPath, res) {
   if (safePath === "/apk") {
     safePath = "/apk-download.html";
   }
-  const filePath = path.join(PUBLIC_DIR, path.normalize(safePath));
 
+  const filePath = path.join(PUBLIC_DIR, path.normalize(safePath));
   if (!filePath.startsWith(PUBLIC_DIR)) {
     sendText(res, 403, "Forbidden");
     return;
@@ -668,7 +842,7 @@ function readJsonBody(req) {
 
     req.on("data", (chunk) => {
       raw += chunk;
-      if (raw.length > 15 * 1024 * 1024) {
+      if (raw.length > 20 * 1024 * 1024) {
         reject(new Error("Request body is too large."));
         req.destroy();
       }
@@ -677,13 +851,38 @@ function readJsonBody(req) {
     req.on("end", () => {
       try {
         resolve(raw ? JSON.parse(raw) : {});
-      } catch (error) {
+      } catch (_error) {
         reject(new Error("Invalid JSON request body."));
       }
     });
 
     req.on("error", reject);
   });
+}
+
+function sendJson(res, statusCode, payload) {
+  res.writeHead(statusCode, {
+    "Content-Type": "application/json; charset=utf-8",
+  });
+  res.end(JSON.stringify(payload));
+}
+
+function sendText(res, statusCode, text) {
+  res.writeHead(statusCode, {
+    "Content-Type": "text/plain; charset=utf-8",
+  });
+  res.end(text);
+}
+
+function tryParseJson(text) {
+  if (!text) {
+    return {};
+  }
+  try {
+    return JSON.parse(text);
+  } catch (_error) {
+    return { raw: text };
+  }
 }
 
 function dataUrlToBuffer(dataUrl) {
@@ -709,18 +908,191 @@ function extensionFromMimeType(mimeType) {
   return ".png";
 }
 
-function sendJson(res, statusCode, payload) {
-  res.writeHead(statusCode, {
-    "Content-Type": "application/json; charset=utf-8",
-  });
-  res.end(JSON.stringify(payload));
+function applyApiCorsHeaders(req, res) {
+  const origin = req.headers.origin || "";
+  if (origin !== APP_ASSET_ORIGIN) {
+    return;
+  }
+
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Vary", "Origin");
 }
 
-function sendText(res, statusCode, text) {
-  res.writeHead(statusCode, {
-    "Content-Type": "text/plain; charset=utf-8",
-  });
-  res.end(text);
+function parseCookies(req) {
+  const raw = req.headers.cookie || "";
+  return raw.split(";").reduce((accumulator, item) => {
+    const [key, ...rest] = item.trim().split("=");
+    if (!key) {
+      return accumulator;
+    }
+    accumulator[key] = rest.join("=");
+    return accumulator;
+  }, {});
+}
+
+function setAccessSessionCookie(req, res) {
+  const expiresAt = Date.now() + ACCESS_SESSION_TTL_MS;
+  const payload = `${expiresAt}.${signValue(ACCESS_SESSION_SECRET, String(expiresAt))}`;
+  setCookie(res, req, ACCESS_SESSION_COOKIE, payload, ACCESS_SESSION_TTL_MS);
+}
+
+function setAuthSessionCookie(req, res, username) {
+  const expiresAt = Date.now() + AUTH_SESSION_TTL_MS;
+  const tokenPayload = `${username}.${expiresAt}`;
+  const signature = signValue(AUTH_SESSION_SECRET, tokenPayload);
+  setCookie(res, req, AUTH_SESSION_COOKIE, `${tokenPayload}.${signature}`, AUTH_SESSION_TTL_MS);
+}
+
+function setCookie(res, req, name, value, ttlMs) {
+  const isCrossOriginAppRequest = req.headers.origin === APP_ASSET_ORIGIN;
+  const cookie = [
+    `${name}=${value}`,
+    "Path=/",
+    "HttpOnly",
+    isCrossOriginAppRequest ? "SameSite=None" : "SameSite=Lax",
+    `Max-Age=${Math.floor(ttlMs / 1000)}`,
+  ];
+
+  if (isCrossOriginAppRequest) {
+    cookie.push("Secure");
+  }
+
+  const current = res.getHeader("Set-Cookie");
+  const nextValue = Array.isArray(current) ? [...current, cookie.join("; ")] : current ? [current, cookie.join("; ")] : cookie.join("; ");
+  res.setHeader("Set-Cookie", nextValue);
+}
+
+function clearCookie(res, name, isCrossOriginAppRequest) {
+  const cookie = [
+    `${name}=`,
+    "Path=/",
+    "HttpOnly",
+    isCrossOriginAppRequest ? "SameSite=None" : "SameSite=Lax",
+    "Max-Age=0",
+  ];
+  if (isCrossOriginAppRequest) {
+    cookie.push("Secure");
+  }
+
+  const current = res.getHeader("Set-Cookie");
+  const nextValue = Array.isArray(current) ? [...current, cookie.join("; ")] : current ? [current, cookie.join("; ")] : cookie.join("; ");
+  res.setHeader("Set-Cookie", nextValue);
+}
+
+function getAuthSession(req) {
+  const cookies = parseCookies(req);
+  const raw = cookies[AUTH_SESSION_COOKIE];
+  if (!raw) {
+    return null;
+  }
+
+  const parts = raw.split(".");
+  if (parts.length < 3) {
+    return null;
+  }
+
+  const username = parts[0];
+  const expiresAt = Number(parts[1]);
+  const signature = parts.slice(2).join(".");
+  if (!FIXED_USERS[username] || !expiresAt || expiresAt < Date.now()) {
+    return null;
+  }
+
+  const signedPayload = `${username}.${parts[1]}`;
+  const expected = Buffer.from(signValue(AUTH_SESSION_SECRET, signedPayload), "hex");
+  const actual = Buffer.from(signature, "hex");
+
+  if (expected.length !== actual.length) {
+    return null;
+  }
+
+  if (!crypto.timingSafeEqual(expected, actual)) {
+    return null;
+  }
+
+  return { username, expiresAt };
+}
+
+function hasValidAccessSession(req) {
+  const cookies = parseCookies(req);
+  const raw = cookies[ACCESS_SESSION_COOKIE];
+  if (!raw) {
+    return false;
+  }
+
+  const [expiresAtRaw, signature] = raw.split(".");
+  const expiresAt = Number(expiresAtRaw);
+  if (!expiresAt || !signature || expiresAt < Date.now()) {
+    return false;
+  }
+
+  const expected = Buffer.from(signValue(ACCESS_SESSION_SECRET, expiresAtRaw), "hex");
+  const actual = Buffer.from(signature, "hex");
+  if (expected.length !== actual.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(expected, actual);
+}
+
+function signValue(secret, value) {
+  return crypto.createHmac("sha256", secret).update(value).digest("hex");
+}
+
+function isValidAccessCode(code) {
+  const proof = crypto.createHmac("sha256", ACCESS_CODE_HMAC_SECRET).update(`mirror-muse-access:${code}`).digest("hex");
+  const expected = Buffer.from(ACCESS_CODE_PROOF, "hex");
+  const actual = Buffer.from(proof, "hex");
+  if (expected.length !== actual.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(expected, actual);
+}
+
+function hashFixedPassword(username, password) {
+  return crypto.createHmac("sha256", `${relaySecret()}:fixed-users`).update(`${username}:${password}`).digest("hex");
+}
+
+function getClientIp(req) {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded) {
+    return forwarded.split(",")[0].trim();
+  }
+  return req.socket.remoteAddress || "unknown";
+}
+
+function getAttemptState(key) {
+  const current = accessAttemptStore.get(key);
+  if (!current) {
+    const fresh = { count: 0, firstAt: Date.now(), blockedUntil: 0 };
+    accessAttemptStore.set(key, fresh);
+    return fresh;
+  }
+
+  if (current.firstAt + ACCESS_BLOCK_WINDOW_MS < Date.now()) {
+    current.count = 0;
+    current.firstAt = Date.now();
+    current.blockedUntil = 0;
+  }
+
+  return current;
+}
+
+function registerFailedAttempt(key) {
+  const state = getAttemptState(key);
+  state.count += 1;
+  if (state.count >= ACCESS_MAX_ATTEMPTS) {
+    state.blockedUntil = Date.now() + ACCESS_BLOCK_WINDOW_MS;
+    state.count = 0;
+    state.firstAt = Date.now();
+  }
+}
+
+function clearAttempts(key) {
+  accessAttemptStore.delete(key);
 }
 
 function loadDotEnv(filePath) {
@@ -750,132 +1122,6 @@ function loadDotEnv(filePath) {
   });
 }
 
-function RELAY_CONFIG_PLACEHOLDER() {
+function relaySecret() {
   return process.env.IMAGE_API_KEY || process.env.OPENAI_API_KEY || "mirror-muse-fallback-secret";
-}
-
-function isValidAccessCode(code) {
-  const proof = crypto.createHmac("sha256", ACCESS_CODE_HMAC_SECRET).update(`mirror-muse-access:${code}`).digest("hex");
-  const expected = Buffer.from(ACCESS_CODE_PROOF, "hex");
-  const actual = Buffer.from(proof, "hex");
-
-  if (expected.length !== actual.length) {
-    return false;
-  }
-
-  return crypto.timingSafeEqual(expected, actual);
-}
-
-function setAccessSessionCookie(req, res) {
-  const expiresAt = Date.now() + ACCESS_SESSION_TTL_MS;
-  const payload = `${expiresAt}.${signAccessSession(String(expiresAt))}`;
-  const isCrossOriginAppRequest = req.headers.origin === APP_ASSET_ORIGIN;
-  const cookie = [
-    `${ACCESS_SESSION_COOKIE}=${payload}`,
-    "Path=/",
-    "HttpOnly",
-    isCrossOriginAppRequest ? "SameSite=None" : "SameSite=Lax",
-    `Max-Age=${Math.floor(ACCESS_SESSION_TTL_MS / 1000)}`,
-  ];
-
-  if (isCrossOriginAppRequest) {
-    cookie.push("Secure");
-  }
-
-  res.setHeader("Set-Cookie", cookie.join("; "));
-}
-
-function hasValidAccessSession(req) {
-  const cookies = parseCookies(req);
-  const raw = cookies[ACCESS_SESSION_COOKIE];
-  if (!raw) {
-    return false;
-  }
-
-  const [expiresAtRaw, signature] = raw.split(".");
-  const expiresAt = Number(expiresAtRaw);
-  if (!expiresAt || !signature || expiresAt < Date.now()) {
-    return false;
-  }
-
-  const expectedSignature = signAccessSession(expiresAtRaw);
-  const expected = Buffer.from(expectedSignature, "hex");
-  const actual = Buffer.from(signature, "hex");
-  if (expected.length !== actual.length) {
-    return false;
-  }
-
-  return crypto.timingSafeEqual(expected, actual);
-}
-
-function signAccessSession(value) {
-  return crypto.createHmac("sha256", ACCESS_SESSION_SECRET).update(value).digest("hex");
-}
-
-function parseCookies(req) {
-  const raw = req.headers.cookie || "";
-  return raw.split(";").reduce((accumulator, part) => {
-    const [key, ...rest] = part.trim().split("=");
-    if (!key) {
-      return accumulator;
-    }
-    accumulator[key] = rest.join("=");
-    return accumulator;
-  }, {});
-}
-
-function getClientIp(req) {
-  const forwarded = req.headers["x-forwarded-for"];
-  if (typeof forwarded === "string" && forwarded) {
-    return forwarded.split(",")[0].trim();
-  }
-  return req.socket.remoteAddress || "unknown";
-}
-
-function applyApiCorsHeaders(req, res) {
-  const origin = req.headers.origin || "";
-  if (origin !== APP_ASSET_ORIGIN) {
-    return;
-  }
-
-  res.setHeader("Access-Control-Allow-Origin", origin);
-  res.setHeader("Access-Control-Allow-Credentials", "true");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Vary", "Origin");
-}
-
-function getAttemptState(ip) {
-  const current = accessAttemptStore.get(ip);
-  if (!current) {
-    const fresh = {
-      count: 0,
-      firstAt: Date.now(),
-      blockedUntil: 0,
-    };
-    accessAttemptStore.set(ip, fresh);
-    return fresh;
-  }
-
-  if (current.firstAt + ACCESS_BLOCK_WINDOW_MS < Date.now()) {
-    current.count = 0;
-    current.firstAt = Date.now();
-    current.blockedUntil = 0;
-  }
-
-  return current;
-}
-
-function registerFailedAttempt(ip) {
-  const state = getAttemptState(ip);
-  state.count += 1;
-  if (state.count >= ACCESS_MAX_ATTEMPTS) {
-    state.blockedUntil = Date.now() + ACCESS_BLOCK_WINDOW_MS;
-    state.count = 0;
-    state.firstAt = Date.now();
-  }
-}
-
-function clearAttempts(ip) {
-  accessAttemptStore.delete(ip);
 }

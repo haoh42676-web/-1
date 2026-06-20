@@ -34,9 +34,18 @@ public class MainActivity extends AppCompatActivity {
 
             Uri[] results = null;
             if (result.getResultCode() == RESULT_OK && result.getData() != null) {
-                Uri dataUri = result.getData().getData();
-                if (dataUri != null) {
-                    results = new Uri[]{dataUri};
+                Intent data = result.getData();
+                if (data.getClipData() != null) {
+                    int itemCount = data.getClipData().getItemCount();
+                    results = new Uri[itemCount];
+                    for (int index = 0; index < itemCount; index++) {
+                        results[index] = data.getClipData().getItemAt(index).getUri();
+                    }
+                } else {
+                    Uri dataUri = data.getData();
+                    if (dataUri != null) {
+                        results = new Uri[]{dataUri};
+                    }
                 }
             }
 
@@ -150,7 +159,7 @@ public class MainActivity extends AppCompatActivity {
             Intent pickIntent = new Intent(Intent.ACTION_GET_CONTENT);
             pickIntent.setType("image/*");
             pickIntent.addCategory(Intent.CATEGORY_OPENABLE);
-            pickIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, false);
+            pickIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
 
             Intent chooserIntent = Intent.createChooser(pickIntent, "选择上衣图片");
 
