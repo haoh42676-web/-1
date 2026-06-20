@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Mirror Muse Mobile</title>
+  <meta name="theme-color" content="#d86b3e">
+  <meta
+    name="description"
+    content="上传一件上衣，选择穿搭风格、场景、模式和配色方向，生成两套完整穿搭建议与 AI 图片。"
+  >
+  <link rel="stylesheet" href="/mobile/mobile.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-hero">
+      <div class="hero-brand-row">
+        <p class="hero-brand">Mirror Muse Mobile</p>
+        <span class="hero-badge">双套穿搭 AI</span>
+      </div>
+      <h1>上传一件上衣，生成两套完整造型</h1>
+      <p class="hero-copy">
+        这是单独给手机 App 使用的移动版界面。系统会围绕同一件上衣，为你设计
+        Look A 和 Look B 两套完整穿搭，包括裤子、鞋子、配饰和帽子建议，并生成一张成图。
+      </p>
+    </header>
+
+    <main class="phone-layout">
+      <section class="phone-card upload-card">
+        <div class="section-top">
+          <div>
+            <p class="section-label">Step 1</p>
+            <h2>上传上衣图片</h2>
+          </div>
+          <span class="mini-pill" id="garmentStatus">未选择</span>
+        </div>
+
+        <div class="garment-preview" id="garmentPreviewShell">
+          <img id="garmentThumb" class="garment-thumb hidden" alt="已上传上衣预览">
+          <div class="garment-placeholder" id="garmentPlaceholder">
+            <strong>准备你的上衣主图</strong>
+            <p>支持白底图、平铺图、商品图和干净背景的实拍图。</p>
+          </div>
+        </div>
+
+        <label class="upload-cta">
+          <input id="garmentInput" type="file" accept="image/*">
+          <span>选择上衣图片</span>
+        </label>
+      </section>
+
+      <form id="lookForm" class="phone-form">
+        <section class="phone-card">
+          <div class="section-top">
+            <div>
+              <p class="section-label">Step 2</p>
+              <h2>选择穿着场景</h2>
+            </div>
+          </div>
+          <label class="field-block">
+            <span>场景</span>
+            <select id="occasionInput">
+              <option value="commute" selected>通勤上班</option>
+              <option value="casual">日常出门</option>
+              <option value="date">约会出片</option>
+              <option value="street">街头造型</option>
+              <option value="travel">旅行轻便</option>
+              <option value="party">聚会晚间</option>
+              <option value="campus">校园休闲</option>
+            </select>
+          </label>
+        </section>
+
+        <section class="phone-card dual-fields">
+          <div class="field-cell">
+            <p class="section-label">Step 3</p>
+            <h2>搭配模式</h2>
+            <label class="field-block">
+              <span>模式</span>
+              <select id="modeInput">
+                <option value="balanced" selected>稳妥不出错</option>
+                <option value="camera">更上镜出片</option>
+                <option value="slimming">更显高显瘦</option>
+                <option value="comfort">更轻松好穿</option>
+                <option value="statement">更有造型感</option>
+                <option value="luxury">更精致贵气</option>
+                <option value="youthful">更年轻活力</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="field-cell">
+            <p class="section-label">Step 4</p>
+            <h2>配色方向</h2>
+            <label class="field-block">
+              <span>配色策略</span>
+              <select id="colorStrategyInput">
+                <option value="toneOnTone" selected>顺色延伸</option>
+                <option value="lightContrast">轻对比提亮</option>
+                <option value="softLuxury">低饱和高级感</option>
+                <option value="seasonal">季节氛围配色</option>
+                <option value="cleanNeutrals">干净中性色</option>
+                <option value="accentPop">一点亮色点题</option>
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <section class="phone-card">
+          <div class="section-top">
+            <div>
+              <p class="section-label">Step 5</p>
+              <h2>选择穿搭风格</h2>
+            </div>
+            <span class="helper-copy">系统会自动补全裤子、鞋子、配饰与帽子</span>
+          </div>
+          <div class="style-grid mobile-style-grid" id="styleGrid">
+            <button class="style-card is-active" type="button" data-style="quietLuxury">
+              <strong>静奢通勤</strong>
+              <span>干净、克制、低调贵气</span>
+            </button>
+            <button class="style-card" type="button" data-style="sweetDate">
+              <strong>甜感约会</strong>
+              <span>柔和、精致、更上镜</span>
+            </button>
+            <button class="style-card" type="button" data-style="streetCool">
+              <strong>街头酷感</strong>
+              <span>年轻、有态度、层次更强</span>
+            </button>
+            <button class="style-card" type="button" data-style="cleanMinimal">
+              <strong>极简清冷</strong>
+              <span>利落、安静、审美更高级</span>
+            </button>
+            <button class="style-card" type="button" data-style="frenchRelaxed">
+              <strong>法式松弛</strong>
+              <span>自然、耐看、轻松但精致</span>
+            </button>
+            <button class="style-card" type="button" data-style="urbanOutdoor">
+              <strong>城市机能</strong>
+              <span>轻户外、实穿、功能感强</span>
+            </button>
+            <button class="style-card" type="button" data-style="retroAcademy">
+              <strong>复古学院</strong>
+              <span>清爽、文艺、带点复古气质</span>
+            </button>
+            <button class="style-card" type="button" data-style="resortChic">
+              <strong>度假轻奢</strong>
+              <span>轻盈、松弛、旅行感强</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="phone-card current-style-card">
+          <p class="section-label">Current Direction</p>
+          <strong id="selectedStyleName">静奢通勤</strong>
+          <p id="selectedStyleText">会先给一套更稳妥的日常方案，再给一套更有造型感的升级方案。</p>
+        </section>
+      </form>
+
+      <section class="phone-card preview-card">
+        <div class="section-top">
+          <div>
+            <p class="section-label">Preview</p>
+            <h2>AI 双套造型图</h2>
+          </div>
+          <span class="mini-pill status-pill" id="previewState">等待上传</span>
+        </div>
+
+        <div class="preview-stage mobile-preview-stage">
+          <div class="preview-placeholder" id="previewPlaceholder">
+            <strong>等待生成双套穿搭图</strong>
+            <p>这里会展示一张同时包含 Look A 和 Look B 的完整结果图。</p>
+          </div>
+          <img id="generatedImage" class="generated-image hidden" alt="AI 生成的双套穿搭图">
+        </div>
+
+        <div class="preview-note mobile-preview-note">
+          <p class="mini-label">生成说明</p>
+          <strong id="previewHeadline">先上传上衣，再生成两套完整 look</strong>
+          <p id="previewCopy">系统会围绕同一件上衣，同时设计 Look A 和 Look B，两套都包含裤子、鞋子、配饰和帽子建议。</p>
+        </div>
+      </section>
+
+      <section class="phone-card result-summary-card">
+        <p class="section-label">Summary</p>
+        <h2>当前推荐概览</h2>
+        <p id="resultIntro">同一件上衣，不只给一个答案，而是给你两种完整穿法。</p>
+      </section>
+
+      <section class="result-stack">
+        <article class="result-card hero-result">
+          <small>整体方向</small>
+          <h3 id="resultVibe">静奢通勤</h3>
+          <p id="resultNarrative">先稳住主单品，再拉开两套方案之间的风格差异。</p>
+        </article>
+
+        <article class="result-card look-card">
+          <small>Look A / 稳妥方案</small>
+          <h3 id="lookOneTitle">高腰烟管裤 + 尖头浅口鞋</h3>
+          <p id="lookOneNarrative">适合直接照着穿去通勤、见面或日常出门，重点是完整、干净、不费力。</p>
+          <div class="look-meta">
+            <span id="lookOneBottom">裤子：高腰烟管裤</span>
+            <span id="lookOneShoes">鞋子：尖头浅口鞋</span>
+            <span id="lookOneAccessory">配饰：金属耳饰</span>
+            <span id="lookOneHat">帽子：无帽 / 发夹替代</span>
+          </div>
+        </article>
+
+        <article class="result-card look-card">
+          <small>Look B / 造型方案</small>
+          <h3 id="lookTwoTitle">垂感直筒裤 + 皮面乐福鞋</h3>
+          <p id="lookTwoNarrative">保留上衣主角位置，但通过更强的轮廓、配色和配件，让第二套更适合出片和表达风格。</p>
+          <div class="look-meta">
+            <span id="lookTwoBottom">裤子：垂感直筒裤</span>
+            <span id="lookTwoShoes">鞋子：皮面乐福鞋</span>
+            <span id="lookTwoAccessory">配饰：结构托特包</span>
+            <span id="lookTwoHat">帽子：小檐礼帽</span>
+          </div>
+        </article>
+
+        <article class="result-card palette-card">
+          <small>配色方向</small>
+          <div class="palette-row" id="paletteRow">
+            <span>奶油白</span>
+            <span>烟灰</span>
+            <span>深咖</span>
+          </div>
+          <p id="resultPaletteText">配色的任务不是抢戏，而是把上衣托出来，让两套方案有区别，也有连续性。</p>
+        </article>
+
+        <article class="result-card insight-card">
+          <small>模式提示</small>
+          <h3 id="modeTitle">稳妥不出错</h3>
+          <p id="modeNarrative">Look A 会更日常好穿，Look B 会在同一方向上再往前走一步，方便你直接做选择。</p>
+        </article>
+      </section>
+    </main>
+
+    <div class="action-dock">
+      <div class="action-copy">
+        <strong>准备生成双套造型</strong>
+        <span>先验证访问码，再调用 AI 生图</span>
+      </div>
+      <div class="action-buttons">
+        <button class="secondary-button" id="resetButton" type="button">重置</button>
+        <button class="primary-button" id="generateButton" type="button">生成双套穿搭图</button>
+      </div>
+    </div>
+
+    <div class="auth-modal hidden" id="authModal" aria-hidden="true">
+      <div class="auth-backdrop" id="authBackdrop"></div>
+      <section class="auth-card" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+        <button class="auth-close" id="authCloseButton" type="button" aria-label="关闭">×</button>
+        <p class="section-label">Access</p>
+        <h2 id="authTitle">输入 4 位访问码</h2>
+        <p class="auth-copy">首次生成图片前需要验证访问码。验证成功后，本设备在一段时间内无需重复输入。</p>
+        <form id="authForm" class="auth-form">
+          <label class="field-block">
+            <span>访问码</span>
+            <input
+              id="accessCodeInput"
+              class="auth-input"
+              type="password"
+              inputmode="numeric"
+              maxlength="4"
+              minlength="4"
+              placeholder="请输入 4 位数字"
+              autocomplete="one-time-code"
+            >
+          </label>
+          <p class="auth-feedback" id="authFeedback">输入正确访问码后即可开始生成。</p>
+          <div class="auth-actions">
+            <button class="primary-button" id="authSubmitButton" type="submit">验证并继续</button>
+            <button class="secondary-button" id="authCancelButton" type="button">取消</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  </div>
+
+  <script src="/mobile/mobile-extra.js"></script>
+</body>
+</html>

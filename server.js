@@ -608,7 +608,10 @@ function tryParseJson(text) {
 }
 
 function serveStatic(requestPath, res) {
-  const safePath = requestPath === "/" ? "/index.html" : requestPath;
+  let safePath = requestPath === "/" ? "/index.html" : requestPath;
+  if (safePath === "/mobile") {
+    safePath = "/mobile/index.html";
+  }
   const filePath = path.join(PUBLIC_DIR, path.normalize(safePath));
 
   if (!filePath.startsWith(PUBLIC_DIR)) {
