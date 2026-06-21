@@ -359,8 +359,8 @@ function tidyMobileChrome() {
 }
 
 function injectLoginPanel() {
-  const hero = document.querySelector(".hero") || document.querySelector(".app-hero");
-  if (!hero || document.querySelector("#mmLoginForm")) {
+  const host = document.querySelector(".hero") || document.querySelector(".app-hero") || document.querySelector(".phone-form");
+  if (!host || document.querySelector("#mmLoginForm")) {
     return;
   }
 
@@ -380,7 +380,11 @@ function injectLoginPanel() {
     </form>
     <p id="mmLoginFeedback" class="mm-auth-feedback">未登录时无法调用真实 AI 生图。</p>
   `;
-  hero.appendChild(panel);
+  if (host.classList.contains("phone-form")) {
+    host.prepend(panel);
+  } else {
+    host.appendChild(panel);
+  }
 
   const style = document.createElement("style");
   style.textContent = `
