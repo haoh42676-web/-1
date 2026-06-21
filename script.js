@@ -160,6 +160,7 @@ const state = {
   isLoggedIn: false,
   username: "",
   wardrobeOnly: false,
+  wardrobePanelOpen: false,
   submitting: false,
   wardrobe: Object.fromEntries(CATEGORY_CONFIG.map((category) => [category.key, []])),
 };
@@ -212,6 +213,7 @@ function initialize() {
   injectLoginPanel();
   injectWardrobePanel();
   hideLegacyAccessUi();
+  tidyMobileChrome();
   bindEvents();
   renderAllWardrobeLists();
   syncStyleSelection();
@@ -233,6 +235,7 @@ function bindEvents() {
 
   document.querySelector("#mmLoginForm")?.addEventListener("submit", submitLogin);
   document.querySelector("#mmLogoutButton")?.addEventListener("click", logoutAccount);
+  document.querySelector("#mmWardrobeToggleButton")?.addEventListener("click", toggleWardrobePanel);
   document.querySelector("#mmWardrobeOnly")?.addEventListener("change", (event) => {
     state.wardrobeOnly = Boolean(event.target.checked);
     clearGenerationState();
@@ -261,6 +264,100 @@ function hideLegacyAccessUi() {
   }
 }
 
+function tidyMobileChrome() {
+  const hero = document.querySelector(".app-hero");
+  const authPanel = hero?.querySelector(".mm-auth-panel");
+  hero?.querySelector(".hero-brand-row")?.remove();
+  hero?.querySelector("h1")?.remove();
+  hero?.querySelector(".hero-copy")?.remove();
+  hero?.querySelector(".hero-download-row")?.remove();
+
+  const accountText = document.querySelector("#mmAccountText");
+  if (accountText) {
+    accountText.textContent = "";
+    accountText.style.display = "none";
+  }
+
+  const wardrobePanel = document.querySelector(".mm-wardrobe-panel");
+  const wardrobeHead = wardrobePanel?.querySelector(".mm-wardrobe-head");
+  const wardrobeSummary = wardrobePanel?.querySelector("#mmWardrobeSummary");
+  const wardrobeGrid = wardrobePanel?.querySelector("#mmWardrobeGrid");
+
+  if (wardrobePanel && wardrobeHead && wardrobeSummary && wardrobeGrid && !document.querySelector("#mmWardrobeToggleButton")) {
+    const toggle = document.createElement("button");
+    toggle.id = "mmWardrobeToggleButton";
+    toggle.type = "button";
+    toggle.className = "mm-wardrobe-launch";
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.innerHTML = `
+      <span>
+        <strong>我的衣橱批量上传</strong>
+        <span id="mmWardrobeLaunchText">点开后可上传自己的衣服、裤子、鞋子、帽子和配饰。</span>
+      </span>
+      <span id="mmWardrobeToggleMark" class="mm-wardrobe-launch-mark">+</span>
+    `;
+
+    const body = document.createElement("div");
+    body.id = "mmWardrobePanelBody";
+    body.className = "mm-wardrobe-panel-body hidden";
+    body.appendChild(wardrobeHead);
+    body.appendChild(wardrobeSummary);
+    body.appendChild(wardrobeGrid);
+
+    wardrobePanel.prepend(toggle);
+    wardrobePanel.appendChild(body);
+    state.wardrobePanelOpen = false;
+  }
+
+  if (!document.querySelector("#mmChromeCleanupStyle")) {
+    const style = document.createElement("style");
+    style.id = "mmChromeCleanupStyle";
+    style.textContent = `
+      .mm-wardrobe-launch {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px 18px;
+        border-radius: 18px;
+        border: 1px solid rgba(14,109,102,0.14);
+        background: linear-gradient(135deg, rgba(255,255,255,0.92), rgba(239,247,244,0.88));
+        color: #1d1814;
+        cursor: pointer;
+        font: inherit;
+        text-align: left;
+      }
+      .mm-wardrobe-launch strong,
+      .mm-wardrobe-launch span {
+        display: block;
+      }
+      .mm-wardrobe-launch span {
+        margin-top: 4px;
+        color: #6c6157;
+        font-size: 0.92rem;
+        line-height: 1.5;
+      }
+      .mm-wardrobe-launch-mark {
+        flex: 0 0 auto;
+        color: #0e6d66;
+        font-size: 1.4rem;
+        line-height: 1;
+      }
+      .mm-wardrobe-panel-body.hidden {
+        display: none !important;
+      }
+      .app-hero {
+        padding: 0;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  if (authPanel && hero && hero.firstElementChild !== authPanel) {
+    hero.prepend(authPanel);
+  }
+}
+
 function injectLoginPanel() {
   const hero = document.querySelector(".hero") || document.querySelector(".app-hero");
   if (!hero || document.querySelector("#mmLoginForm")) {
@@ -273,11 +370,11 @@ function injectLoginPanel() {
     <div class="mm-auth-copy">
       <p class="mm-auth-kicker">Account</p>
       <strong id="mmAccountTitle">登录后才可生图</strong>
-      <p id="mmAccountText">只提供 5 个固定账号：test1 到 test5，密码全部都是 123456，不提供注册功能。</p>
+      <p id="mmAccountText"></p>
     </div>
     <form id="mmLoginForm" class="mm-auth-form">
-      <input id="mmUsername" class="mm-auth-field" type="text" placeholder="账号，例如 test1" autocomplete="username">
-      <input id="mmPassword" class="mm-auth-field" type="password" placeholder="密码 123456" autocomplete="current-password">
+      <input id="mmUsername" class="mm-auth-field" type="text" placeholder="请输入账号" autocomplete="username">
+      <input id="mmPassword" class="mm-auth-field" type="password" placeholder="请输入密码" autocomplete="current-password">
       <button id="mmLoginButton" class="mm-auth-button" type="submit">登录账号</button>
       <button id="mmLogoutButton" class="mm-auth-link hidden" type="button">退出登录</button>
     </form>
@@ -322,151 +419,43 @@ function injectLoginPanel() {
     .mm-auth-field {
       min-height: 46px;
       border-radius: 14px;
-      border: 1px solid rgba(73,57,43,0.12);
-      background: rgba(255,255,255,0.94);
+      border: 1px solid rgba(14, 109, 102, 0.18);
       padding: 0 14px;
       font: inherit;
-      color: #1d1814;
+      background: rgba(255,255,255,0.92);
     }
     .mm-auth-button,
     .mm-auth-link {
       min-height: 46px;
-      border-radius: 14px;
       border: none;
+      border-radius: 14px;
       font: inherit;
       cursor: pointer;
     }
     .mm-auth-button {
-      color: #fff8f2;
-      background: linear-gradient(135deg, #0e6d66, #0a554f);
+      background: #0e6d66;
+      color: #fff;
+      font-weight: 700;
     }
     .mm-auth-link {
-      color: #1d1814;
-      background: rgba(255,255,255,0.88);
-      border: 1px solid rgba(73,57,43,0.12);
+      background: rgba(14, 109, 102, 0.1);
+      color: #0e6d66;
+      font-weight: 600;
     }
     .mm-auth-feedback {
       margin: 0;
-      min-height: 22px;
       color: #6c6157;
-      line-height: 1.5;
+      line-height: 1.6;
     }
     .mm-auth-feedback.is-error {
-      color: #a23f2b;
+      color: #b42318;
     }
     .mm-auth-feedback.is-success {
       color: #0e6d66;
     }
-    .mm-wardrobe-panel {
-      margin-top: 18px;
-      padding: 18px;
-      border-radius: 20px;
-      background: linear-gradient(135deg, rgba(255,252,246,0.95), rgba(239,247,244,0.92));
-      border: 1px solid rgba(14,109,102,0.14);
-      display: grid;
-      gap: 14px;
-    }
-    .mm-wardrobe-head {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      align-items: flex-start;
-    }
-    .mm-wardrobe-head p,
-    .mm-wardrobe-head h3,
-    .mm-wardrobe-head strong {
-      margin: 0;
-    }
-    .mm-wardrobe-toggle {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      color: #1d1814;
-      font-size: 0.94rem;
-    }
-    .mm-wardrobe-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
-    }
-    .mm-wardrobe-card {
-      padding: 14px;
-      border-radius: 18px;
-      background: rgba(255,255,255,0.84);
-      border: 1px solid rgba(73,57,43,0.08);
-      display: grid;
-      gap: 10px;
-    }
-    .mm-wardrobe-card strong {
-      font-size: 1rem;
-    }
-    .mm-wardrobe-upload {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 42px;
-      border-radius: 14px;
-      background: rgba(14,109,102,0.1);
-      color: #0e6d66;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    .mm-wardrobe-upload input {
-      display: none;
-    }
-    .mm-wardrobe-list {
-      display: grid;
-      gap: 8px;
-    }
-    .mm-wardrobe-item {
-      display: grid;
-      grid-template-columns: 54px 1fr auto;
-      gap: 10px;
-      align-items: center;
-      padding: 8px;
-      border-radius: 14px;
-      background: rgba(255,255,255,0.88);
-      border: 1px solid rgba(73,57,43,0.08);
-    }
-    .mm-wardrobe-thumb {
-      width: 54px;
-      height: 54px;
-      border-radius: 12px;
-      object-fit: cover;
-      background: rgba(0,0,0,0.04);
-    }
-    .mm-wardrobe-meta strong,
-    .mm-wardrobe-meta span {
-      display: block;
-    }
-    .mm-wardrobe-meta span {
-      color: #6c6157;
-      font-size: 0.86rem;
-      line-height: 1.4;
-    }
-    .mm-wardrobe-remove {
-      min-height: 36px;
-      padding: 0 10px;
-      border-radius: 10px;
-      border: 1px solid rgba(73,57,43,0.12);
-      background: rgba(255,255,255,0.92);
-      cursor: pointer;
-    }
-    .mm-wardrobe-summary {
-      color: #6c6157;
-      font-size: 0.92rem;
-      line-height: 1.5;
-    }
-    @media (max-width: 760px) {
-      .mm-auth-form,
-      .mm-wardrobe-grid {
+    @media (max-width: 920px) {
+      .mm-auth-form {
         grid-template-columns: 1fr;
-      }
-      .mm-wardrobe-item {
-        grid-template-columns: 46px 1fr;
-      }
-      .mm-wardrobe-remove {
-        grid-column: span 2;
       }
     }
   `;
@@ -482,19 +471,28 @@ function injectWardrobePanel() {
   const wrapper = document.createElement("section");
   wrapper.className = "mm-wardrobe-panel";
   wrapper.innerHTML = `
-    <div class="mm-wardrobe-head">
-      <div>
-        <p class="section-label">Wardrobe</p>
-        <h3>我的衣橱批量上传</h3>
-        <p>可批量上传你自己的上衣、裤子、鞋子、帽子和配饰照片，也可以切换成只用你已有单品来做搭配。</p>
+    <button id="mmWardrobeToggleButton" type="button" class="mm-wardrobe-launch" aria-expanded="false">
+      <span>
+        <strong>我的衣橱批量上传</strong>
+        <span id="mmWardrobeLaunchText">点开后可上传自己的衣服、裤子、鞋子、帽子和配饰。</span>
+      </span>
+      <span id="mmWardrobeToggleMark" class="mm-wardrobe-launch-mark">+</span>
+    </button>
+    <div id="mmWardrobePanelBody" class="mm-wardrobe-panel-body hidden">
+      <div class="mm-wardrobe-head">
+        <div>
+          <p class="section-label">Wardrobe</p>
+          <h3>我的衣橱批量上传</h3>
+          <p>可批量上传你自己的上衣、裤子、鞋子、帽子和配饰照片，也可以切换成只用你已有单品来做搭配。</p>
+        </div>
+        <label class="mm-wardrobe-toggle">
+          <input id="mmWardrobeOnly" type="checkbox">
+          <span>只搭配我自己的衣橱</span>
+        </label>
       </div>
-      <label class="mm-wardrobe-toggle">
-        <input id="mmWardrobeOnly" type="checkbox">
-        <span>只搭配我自己的衣橱</span>
-      </label>
+      <strong id="mmWardrobeSummary" class="mm-wardrobe-summary">还没有上传衣橱单品。</strong>
+      <div id="mmWardrobeGrid" class="mm-wardrobe-grid"></div>
     </div>
-    <strong id="mmWardrobeSummary" class="mm-wardrobe-summary">还没有上传衣橱单品。</strong>
-    <div id="mmWardrobeGrid" class="mm-wardrobe-grid"></div>
   `;
 
   if (controlPanel.classList.contains("phone-form")) {
@@ -516,6 +514,31 @@ function injectWardrobePanel() {
       </div>
     </article>
   `).join("");
+}
+
+function toggleWardrobePanel() {
+  state.wardrobePanelOpen = !state.wardrobePanelOpen;
+
+  const body = document.querySelector("#mmWardrobePanelBody") || document.querySelector(".mm-wardrobe-panel-body");
+  const mark = document.querySelector("#mmWardrobeToggleMark");
+  const button = document.querySelector("#mmWardrobeToggleButton");
+  const textNode = document.querySelector("#mmWardrobeLaunchText");
+
+  if (body) {
+    body.classList.toggle("hidden", !state.wardrobePanelOpen);
+  }
+  if (mark) {
+    mark.textContent = state.wardrobePanelOpen ? "-" : "+";
+  }
+  if (button) {
+    button.setAttribute("aria-expanded", state.wardrobePanelOpen ? "true" : "false");
+  }
+  if (textNode) {
+    const total = wardrobeCount();
+    textNode.textContent = total > 0
+      ? `当前已上传 ${total} 件单品，点开可继续管理。`
+      : "点开后可上传自己的衣服、裤子、鞋子、帽子和配饰。";
+  }
 }
 
 function updateState(key, value) {
@@ -725,7 +748,7 @@ async function ensureLoggedIn() {
 
   const feedback = document.querySelector("#mmLoginFeedback");
   if (feedback) {
-    feedback.textContent = "请先使用 test1 到 test5 中任意一个账号登录。";
+    feedback.textContent = "请先登录账号后再继续。";
     feedback.classList.add("is-error");
     feedback.classList.remove("is-success");
   }
@@ -980,7 +1003,7 @@ function syncAccountPanel() {
 
   if (state.isLoggedIn) {
     title.textContent = `当前账号：${state.username}`;
-    text.textContent = "当前账号已登录，现在可以直接生图，也可以批量上传你的衣橱单品并限制只用自有衣物搭配。";
+    text.textContent = "";
     if (!feedback.classList.contains("is-error")) {
       feedback.textContent = `登录已完成，当前使用账号 ${state.username}。`;
     }
@@ -1000,7 +1023,7 @@ function syncAccountPanel() {
   }
 
   title.textContent = "登录后才可生图";
-  text.textContent = "只提供 5 个固定账号：test1、test2、test3、test4、test5，密码全部都是 123456，不提供注册功能。";
+  text.textContent = "";
   if (!feedback.classList.contains("is-error")) {
     feedback.textContent = "未登录时无法调用真实 AI 生图。";
   }
@@ -1012,7 +1035,7 @@ function syncAccountPanel() {
   }
   if (passwordInput) {
     passwordInput.disabled = false;
-    passwordInput.placeholder = "密码 123456";
+    passwordInput.placeholder = "请输入密码";
   }
 }
 
@@ -1117,7 +1140,7 @@ function toUserError(payload) {
   const message = payload?.error || "图片生成失败。";
 
   if (/invalid username or password/i.test(message)) {
-    return "账号或密码错误，请使用 test1 到 test5，密码为 123456。";
+    return "账号或密码错误，请重试。";
   }
   if (/please log in/i.test(message)) {
     return "请先登录账号后再生图。";
@@ -1132,10 +1155,9 @@ function toUserError(payload) {
     return "当前生图通道额度不足或触发限流，请稍后再试。";
   }
   if (/temporarily unavailable|upstream/i.test(message)) {
-    return "图像服务上游暂时不可用，请稍后重新生成。";
+    return "上游生图服务暂时不可用，请稍后再试。";
   }
-
-  return `${message} 你可以点击“重新生成双套穿搭图”再试一次。`;
+  return message;
 }
 
 function readFileAsDataUrl(file) {
